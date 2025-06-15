@@ -22,7 +22,7 @@
     "dev:direct": "npx tsx src/server.ts",
     "dev:build": "npm run build && node dist/index.js",
     "inspect": "npx fastmcp inspect src/server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo \"Warning: no test specified\" && exit 0",
     "prepare": "npm run build"
   },
   "keywords": [
