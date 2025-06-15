@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/andrea9293/mcp-documentation-server/compare/v1.1.0...v1.1.1) (2025-06-15)
+
+
+### Bug Fixes
+
+* correct bin path in package.json for proper executable resolution ([d7674f4](https://github.com/andrea9293/mcp-documentation-server/commit/d7674f413bc07e7abd8c24f2208b757f114f29fd))
+
 # [1.1.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.0.0...v1.1.0) (2025-06-15)
 
 
