@@ -84,6 +84,65 @@ Replace `{document_id}` with the actual ID returned from add_document:
 }
 ```
 
+## New Upload Functionality
+
+### Upload Folder Management
+The server now supports a dedicated uploads folder for manual file uploads:
+
+- **Supported formats**: `.txt` and `.md` files
+- **Automatic processing**: Files are converted to chunks with embeddings
+- **Overwrite protection**: Files with the same name replace previous versions
+
+### New Tools
+
+#### 1. Get Uploads Path
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "get_uploads_path",
+    "arguments": {}
+  }
+}
+```
+Returns the absolute path where you can place your files.
+
+#### 2. List Uploads Files
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "list_uploads_files", 
+    "arguments": {}
+  }
+}
+```
+Shows all files in the uploads folder with their status.
+
+#### 3. Process Uploads
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "process_uploads",
+    "arguments": {}
+  }
+}
+```
+Processes all supported files and creates embeddings.
+
+### Workflow
+
+1. **Get the uploads path** using `get_uploads_path`
+2. **Place your .txt or .md files** in that folder
+3. **Check files** with `list_uploads_files`
+4. **Process files** with `process_uploads`
+5. **Search documents** normally with the document IDs
+
+### Updated Search Parameters
+
+Search now uses **700-character chunks** (increased from 200) for better context.
+
 ### 3. Expected Results
 
 - **Add Document**: Should return a success message with the document ID

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import * as path from 'path';
 import { DocumentManager, FileDocumentStorage } from './document-manager.js';
 import { SearchEngine } from './search-engine.js';
-import { createEmbeddingProvider } from './embedding-provider.js';
+import { createEmbeddingProvider, createEmbeddingProviderWithModel, createLazyEmbeddingProvider } from './embedding-provider.js';
 import { getDefaultDataDir, formatFileSize, formatSimilarityScore, extractExcerpt, inferContentType, normalizeText } from './utils.js';
 import { AddDocumentRequest, SearchRequest } from './types.js';
 
@@ -16,27 +16,33 @@ const DEFAULT_SEARCH_LIMIT = parseInt(process.env.MCP_SEARCH_LIMIT || '10');
 
 // Initialize components
 let searchEngine: SearchEngine;
+let documentManager: DocumentManager;
+let currentEmbeddingProvider: any;
 let isInitialized = false;
 
-async function initializeServer() {
+async function initializeServer(embeddingModel?: string) {
   if (isInitialized) return;
 
   try {
     console.error('Initializing MCP Documentation Server...');
     
-    // Create embedding provider
-    const embeddingProvider = await createEmbeddingProvider();
-    console.error(`Embedding provider: ${embeddingProvider.constructor.name}`);
+    // Create embedding provider with lazy initialization for faster startup
+    const embeddingProvider = embeddingModel 
+      ? createLazyEmbeddingProvider(embeddingModel)
+      : createLazyEmbeddingProvider(); // Start with smaller model by default
+    currentEmbeddingProvider = embeddingProvider;
+    console.error(`Embedding provider: ${embeddingProvider.constructor.name} (${embeddingProvider.getModelName()})`);
 
     // Create storage and document manager
     const storage = new FileDocumentStorage(DATA_DIR);
-    const documentManager = new DocumentManager(storage);
+    documentManager = new DocumentManager(storage);
 
     // Create search engine
     searchEngine = new SearchEngine(documentManager, embeddingProvider);
 
     console.error(`Data directory: ${DATA_DIR}`);
     console.error('MCP Documentation Server initialized successfully');
+    console.error('Note: Embedding model will be loaded on first use');
     isInitialized = true;
   } catch (error) {
     console.error('Failed to initialize server:', error);
@@ -44,11 +50,30 @@ async function initializeServer() {
   }
 }
 
+async function switchEmbeddingModel(modelName: string) {
+  try {
+    console.error(`Switching to embedding model: ${modelName}`);
+    console.error('This may take a few minutes for larger models...');
+    
+    // Create new embedding provider with proper initialization
+    const newEmbeddingProvider = await createEmbeddingProviderWithModel(modelName);
+    
+    // Update the search engine with new provider
+    searchEngine = new SearchEngine(documentManager, newEmbeddingProvider);
+    currentEmbeddingProvider = newEmbeddingProvider;
+    
+    console.error(`Successfully switched to model: ${modelName}`);
+    return true;
+  } catch (error) {
+    console.error(`Failed to switch model: ${error}`);
+    throw error;
+  }
+}
+
 // Create FastMCP server
 const server = new FastMCP({
   name: 'mcp-documentation-server',
-  version: '1.0.0',
-  instructions: `
+  version: '1.0.0',  instructions: `
 This server provides document management and semantic search capabilities.
 
 Available tools:
@@ -57,8 +82,14 @@ Available tools:
 - get_document: Retrieve a specific document by ID
 - list_documents: List all available documents
 - delete_document: Remove a document from the collection
+- switch_embedding_model: Switch to a different embedding model
+- get_embedding_info: Get information about the current embedding model
+- get_uploads_path: Get the path to the uploads folder
+- list_upload_files: List files in the uploads folder
+- process_upload_files: Process and add all .txt/.md files from uploads
 
 The server uses embeddings for semantic search, allowing you to find relevant documents even when they don't contain exact keyword matches.
+The default model is 'Xenova/paraphrase-multilingual-mpnet-base-v2' for high-quality multilingual embeddings.
   `.trim(),
 });
 
@@ -394,6 +425,75 @@ server.addTool({
     } catch (error) {
       log.error('Failed to delete document', { error: String(error) });
       throw new Error(`Failed to delete document: ${error}`);
+    }
+  }
+});
+
+// Switch embedding model tool
+server.addTool({
+  name: 'switch_embedding_model',
+  description: 'Switch to a different embedding model for semantic search',
+  parameters: z.object({
+    modelName: z.string().describe('Name of the embedding model (e.g., "Xenova/paraphrase-multilingual-mpnet-base-v2", "Xenova/all-MiniLM-L6-v2")')
+  }),
+  execute: async (args, { log }) => {
+    await initializeServer();
+
+    const { modelName } = args;
+
+    log.info('Switching embedding model', { modelName });
+
+    try {
+      await switchEmbeddingModel(modelName);
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Successfully switched to embedding model: ${modelName}\n\nNote: Previously added documents will need to be re-embedded if you want consistent search results.`
+          }
+        ]
+      };
+    } catch (error) {
+      log.error('Failed to switch embedding model', { error: String(error) });
+      throw new Error(`Failed to switch embedding model: ${error}`);
+    }
+  }
+});
+
+// Get embedding info tool
+server.addTool({
+  name: 'get_embedding_info',
+  description: 'Get information about the current embedding model and provider',
+  parameters: z.object({}),
+  execute: async (args, { log }) => {
+    await initializeServer();
+
+    try {      const providerInfo = {
+        providerType: currentEmbeddingProvider.constructor.name,
+        isAvailable: currentEmbeddingProvider.isAvailable(),
+        modelName: currentEmbeddingProvider.getModelName()
+      };
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Current Embedding Provider Information:
+- Provider Type: ${providerInfo.providerType}
+- Model Available: ${providerInfo.isAvailable}
+- Model Name: ${providerInfo.modelName}
+
+Supported models include:
+- Xenova/paraphrase-multilingual-mpnet-base-v2 (default, high-quality multilingual)
+- Xenova/all-MiniLM-L6-v2 (fallback, smaller size)
+- And other models available on Hugging Face with Xenova/ prefix`
+          }
+        ]
+      };
+    } catch (error) {
+      log.error('Failed to get embedding info', { error: String(error) });
+      throw new Error(`Failed to get embedding info: ${error}`);
     }
   }
 });
