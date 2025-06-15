@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.1.1...v1.2.0) (2025-06-15)
+
+
+### Features
+
+* add comprehensive document deletion functionality and improve documentation ([00329c4](https://github.com/andrea9293/mcp-documentation-server/commit/00329c4b147c3a47af30219b2055a71c7767c322))
+
 ## [1.1.1](https://github.com/andrea9293/mcp-documentation-server/compare/v1.1.0...v1.1.1) (2025-06-15)
 
 

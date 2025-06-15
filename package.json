@@ -1,7 +1,7 @@
 {
   "name": "@andrea9293/mcp-documentation-server",
-  "version": "1.1.1",
-  "description": "A TypeScript MCP server for document management and semantic search with embeddings",  
+  "version": "1.2.0",
+  "description": "A TypeScript MCP server for document management and semantic search with embeddings",
   "main": "dist/server.js",
   "type": "module",
   "bin": {
