@@ -34,10 +34,11 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 
 ## Features
 
-- 📄 **Document Management** - Add, list, retrieve documents with metadata
-- 🔍 **Semantic Search** - AI-powered search using embeddings
+- 📄 **Document Management** - Add, list, retrieve, and delete documents with metadata
+- 🔍 **Semantic Search** - AI-powered search using embeddings  
 - 📁 **File Upload** - Drop .txt/.md files in uploads folder for processing
 - 🧩 **Smart Chunking** - Automatic text splitting for better search accuracy
+- 🗑️ **Document Deletion** - Clean removal of documents and their chunks
 - 🌍 **Multilingual** - Supports multiple languages with quality embeddings
 - 💾 **Local Storage** - All data stored locally in JSON format
 - ⚡ **Fast Setup** - No database required, works out of the box
@@ -50,6 +51,7 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 | `search_documents` | Search for chunks within a specific document |
 | `list_documents` | List all documents with their metadata |
 | `get_document` | Retrieve a complete document by ID |
+| `delete_document` | Delete a document by ID (removes all associated chunks) |
 | `get_uploads_path` | Get path to uploads folder |
 | `list_uploads_files` | List files in uploads folder |
 | `process_uploads` | Process uploaded files into documents |
@@ -81,6 +83,17 @@ Add to your MCP client configuration (e.g., Claude Desktop):
     "document_id": "doc-123",
     "query": "variable assignment",
     "limit": 5
+  }
+}
+```
+
+### Deleting a Document
+
+```json
+{
+  "tool": "delete_document",
+  "arguments": {
+    "id": "doc-123"
   }
 }
 ```
@@ -132,6 +145,23 @@ npm install
 npm run build
 npm start
 ```
+
+## Best Practices
+
+### Document Organization
+- Use descriptive titles for easy identification
+- Add relevant metadata (tags, categories) for better organization
+- Keep documents focused on specific topics for better search accuracy
+
+### Search Optimization
+- Use specific, descriptive search queries
+- Combine keywords related to your topic
+- Start with broader queries, then refine with more specific terms
+
+### Performance Tips
+- Process large files during off-peak hours (initial embedding creation)
+- Use smaller embedding models for faster performance if quality is acceptable
+- Regularly clean up unused documents to maintain performance
 
 ## Troubleshooting
 
