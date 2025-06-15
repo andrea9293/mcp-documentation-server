@@ -5,6 +5,7 @@ import { writeFile, readFile } from "fs/promises";
 import * as path from "path";
 import { glob } from "glob";
 import { pipeline } from '@xenova/transformers';
+import { createLazyEmbeddingProvider } from './embedding-provider.js';
 
 // Types
 interface DocumentChunk {
@@ -45,7 +46,7 @@ class TransformersEmbeddingProvider implements EmbeddingProvider {
     private isInitialized = false;
     private initPromise: Promise<void> | null = null;
 
-    constructor(private modelName: string = 'Xenova/paraphrase-multilingual-mpnet-base-v2') { }
+    constructor(private modelName: string = 'Xenova/all-MiniLM-L6-v2') { }
 
     private async initialize(): Promise<void> {
         if (this.isInitialized) return;
@@ -155,17 +156,8 @@ class DocumentManager {
     private ensureUploadsDir(): void {
         if (!existsSync(this.uploadsDir)) {
             mkdirSync(this.uploadsDir, { recursive: true });
-        }
-    } getUploadsPath(): string {
+        }    } getUploadsPath(): string {
         return path.resolve(this.uploadsDir);
-    }
-
-    setEmbeddingProvider(provider: EmbeddingProvider): void {
-        this.embeddingProvider = provider;
-    }
-
-    getEmbeddingProvider(): EmbeddingProvider {
-        return this.embeddingProvider;
     }
 
     private getDocumentPath(id: string): string {
@@ -419,56 +411,6 @@ class DocumentManager {
     }
 }
 
-// Factory functions for embedding providers
-async function createEmbeddingProvider(modelName?: string): Promise<EmbeddingProvider> {
-    const defaultModel = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
-    const fallbackModel = 'Xenova/all-MiniLM-L6-v2';
-
-    // For faster initialization, try the smaller model first if no specific model is requested
-    const modelsToTry = modelName 
-        ? [modelName, fallbackModel] 
-        : [fallbackModel]; // Start with smaller model for faster startup
-
-    for (const model of modelsToTry) {
-        try {
-            console.error(`Attempting to load embedding model: ${model}`);
-            
-            const provider = new TransformersEmbeddingProvider(model);
-            
-            // Create a shorter timeout for testing if model loads
-            const timeoutPromise = new Promise<never>((_, reject) => {
-                setTimeout(() => {
-                    reject(new Error('Model test timed out'));
-                }, modelName ? 2 * 60 * 1000 : 30 * 1000); // 2 min for specific model, 30 sec for auto-selection
-            });
-
-            // Test if the model works with a timeout
-            await Promise.race([
-                provider.generateEmbedding('test'),
-                timeoutPromise
-            ]);
-            
-            console.error(`Successfully loaded embedding model: ${model}`);
-            return provider;
-        } catch (error) {
-            console.error(`Failed to load model ${model}:`, error);
-            
-            // If this was the last model to try, continue to simple embeddings
-            if (model === modelsToTry[modelsToTry.length - 1]) {
-                break;
-            }
-        }
-    }
-
-    console.error('All transformer models failed, falling back to simple embeddings');
-    return new SimpleEmbeddingProvider();
-}
-
-function createLazyEmbeddingProvider(modelName?: string): EmbeddingProvider {
-    const defaultModel = 'Xenova/all-MiniLM-L6-v2'; // Use smaller model as default for faster startup
-    return new TransformersEmbeddingProvider(modelName || defaultModel);
-}
-
 // Initialize server
 const server = new FastMCP({
     name: "Documentation Server",
@@ -480,8 +422,9 @@ let documentManager: DocumentManager;
 
 async function initializeDocumentManager() {
     if (!documentManager) {
-        // Use lazy initialization for faster startup
-        const embeddingProvider = createLazyEmbeddingProvider();
+        // Get embedding model from environment variable
+        const embeddingModel = process.env.MCP_EMBEDDING_MODEL || 'Xenova/all-MiniLM-L6-v2';
+        const embeddingProvider = createLazyEmbeddingProvider(embeddingModel);
         documentManager = new DocumentManager("./data", "./uploads", embeddingProvider);
         console.error(`Document manager initialized with: ${embeddingProvider.getModelName()} (lazy loading)`);
     }
@@ -599,7 +542,8 @@ server.addTool({
     parameters: z.object({}),
     execute: async () => {
         try {
-            const uploadsPath = documentManager.getUploadsPath();
+            const manager = await initializeDocumentManager();
+            const uploadsPath = manager.getUploadsPath();
             return `Uploads folder path: ${uploadsPath}\n\nYou can place .txt and .md files in this folder, then use the 'process_uploads' tool to create embeddings for them.`;
         } catch (error) {
             throw new Error(`Failed to get uploads path: ${error instanceof Error ? error.message : String(error)}`);
@@ -655,51 +599,6 @@ server.addTool({
             return JSON.stringify(fileList, null, 2);
         } catch (error) {
             throw new Error(`Failed to list uploads files: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    },
-});
-
-// Switch embedding model tool
-server.addTool({
-    name: "switch_embedding_model",
-    description: "Switch to a different embedding model for semantic search",
-    parameters: z.object({
-        modelName: z.string().describe("Name of the embedding model (e.g., 'Xenova/paraphrase-multilingual-mpnet-base-v2', 'Xenova/all-MiniLM-L6-v2')"),
-    }),
-    execute: async (args) => {
-        try {
-            const newProvider = await createEmbeddingProvider(args.modelName);
-            const manager = await initializeDocumentManager();
-            manager.setEmbeddingProvider(newProvider);
-
-            return `Successfully switched to embedding model: ${args.modelName}\n\nNote: Previously added documents will need to be re-embedded if you want consistent search results.`;
-        } catch (error) {
-            throw new Error(`Failed to switch embedding model: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    },
-});
-
-// Get embedding info tool
-server.addTool({
-    name: "get_embedding_info",
-    description: "Get information about the current embedding model and provider",
-    parameters: z.object({}),
-    execute: async () => {
-        try {
-            const manager = await initializeDocumentManager();
-            const provider = manager.getEmbeddingProvider();
-
-            return `Current Embedding Provider Information:
-- Provider Type: ${provider.constructor.name}
-- Model Available: ${provider.isAvailable()}
-- Model Name: ${provider.getModelName()}
-
-Supported models include:
-- Xenova/paraphrase-multilingual-mpnet-base-v2 (default, high-quality multilingual)
-- Xenova/all-MiniLM-L6-v2 (fallback, smaller size)
-- And other models available on Hugging Face with Xenova/ prefix`;
-        } catch (error) {
-            throw new Error(`Failed to get embedding info: ${error instanceof Error ? error.message : String(error)}`);
         }
     },
 });

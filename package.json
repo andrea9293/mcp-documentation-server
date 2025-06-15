@@ -1,20 +1,29 @@
 {
-  "name": "mcp-documentation-server-ts",
-  "version": "1.0.0",
-  "description": "A TypeScript MCP server for document management and semantic search",
+  "name": "@andrea9293/mcp-documentation-server",
+  "version": "0.1.0",
+  "description": "A TypeScript MCP server for document management and semantic search with embeddings",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
     "mcp-documentation-server": "./dist/index.js"
   },
+  "homepage": "https://github.com/andrea9293/mcp-documentation-server#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrea9293/mcp-documentation-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/andrea9293/mcp-documentation-server/issues"
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && shx chmod +x dist/*.js",
     "start": "tsx src/server.ts",
     "dev": "fastmcp dev src/server.ts",
     "dev:direct": "npx tsx src/server.ts",
     "dev:build": "npm run build && node dist/index.js",
     "inspect": "npx fastmcp inspect src/server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "npm run build"
   },
   "keywords": [
     "mcp",
@@ -23,15 +32,23 @@
     "search",
     "embeddings"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
   "files": [
     "dist"
   ],
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.3",
+    "@semantic-release/npm": "^12.0.1",
+    "@semantic-release/release-notes-generator": "^14.0.3",
+    "@tsconfig/node22": "^22.0.1",
     "@types/fs-extra": "^11.0.4",
     "@types/glob": "^8.1.0",
-    "@tsconfig/node22": "^22.0.1",
+    "semantic-release": "^24.2.5",
+    "shx": "^0.3.4",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   },

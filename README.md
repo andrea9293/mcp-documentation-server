@@ -6,8 +6,8 @@ A Model Context Protocol (MCP) server for document management with semantic sear
 
 - **Document Management**: Add, retrieve, and list documents with automatic chunking
 - **Semantic Search**: Search within specific documents using high-quality multilingual embeddings and chunk-based retrieval
-- **Advanced Embedding Models**: Uses `paraphrase-multilingual-mpnet-base-v2` for superior multilingual semantic search
-- **Embedding Model Switching**: Switch between different embedding models dynamically
+- **Configurable Embedding Models**: Use environment variables to configure embedding models (defaults to `Xenova/all-MiniLM-L6-v2`, recommend `Xenova/paraphrase-multilingual-mpnet-base-v2` for best results)
+- **Lazy Loading**: Models load on first use to prevent MCP client timeouts
 - **Automatic Chunking**: Documents are split into 700-character semantic chunks for precise search
 - **Upload Folder Management**: Upload .txt and .md files manually for automatic processing
 - **Metadata Support**: Rich metadata storage with custom fields
@@ -17,7 +17,7 @@ A Model Context Protocol (MCP) server for document management with semantic sear
 ## 📁 Project Structure
 
 ```
-mcp-documentation-server-ts/
+mcp-documentation-server/
 ├── src/
 │   ├── server.ts          # Main MCP server with FastMCP
 │   ├── types.ts           # TypeScript interfaces
@@ -100,26 +100,6 @@ List all files in the uploads folder with their details.
 
 **Returns:** Array of files with size, modification date, and supported status
 
-### `switch_embedding_model`
-Switch to a different embedding model for improved semantic search.
-
-**Parameters:**
-- `modelName` (string): Name of the embedding model (e.g., "Xenova/paraphrase-multilingual-mpnet-base-v2", "Xenova/all-MiniLM-L6-v2")
-
-**Example:**
-```json
-{
-  "modelName": "Xenova/all-MiniLM-L6-v2"
-}
-```
-
-**Returns:** Success message with note about re-embedding existing documents
-
-### `get_embedding_info`
-Get information about the current embedding model and provider.
-
-**Returns:** Details about the current embedding model, availability, and supported options
-
 ## 📊 Document Structure
 
 Each document is automatically processed into chunks:
@@ -166,18 +146,92 @@ Documents are automatically split into chunks using an intelligent algorithm:
 
 **File Naming**: The filename (without extension) becomes the document title. Files with the same name will overwrite previous versions.
 
-## 🚀 Installation
+## 📦 Installation
 
-### Prerequisites
-- Node.js 18+ 
-- npm
+### Using NPX (Recommended)
 
-### From Source
+The easiest way to use this server is with npx:
+
+```bash
+npx @andrea9293/mcp-documentation-server
+```
+
+### Installation via NPM
+
+```bash
+npm install -g @andrea9293/mcp-documentation-server
+```
+
+Then run with:
+
+```bash
+mcp-documentation-server
+```
+
+### Configuration in MCP Clients
+
+Add this server to your MCP client configuration:
+
+```json
+{
+  "mcpServers": {
+    "documentation": {
+      "command": "npx",
+      "args": [
+        "@andrea9293/mcp-documentation-server"
+      ],
+      "env": {
+        "MCP_EMBEDDING_MODEL": "Xenova/paraphrase-multilingual-mpnet-base-v2"
+      }
+    }
+  }
+}
+```
+
+**Environment Variables:**
+- `MCP_EMBEDDING_MODEL`: Embedding model to use (default: `Xenova/all-MiniLM-L6-v2`)
+  - Recommended: `Xenova/paraphrase-multilingual-mpnet-base-v2` for best multilingual results (more RAM used)
+  - Alternative: `Xenova/all-MiniLM-L6-v2` for faster processing
+
+### Manual Installation from Source
 ```bash
 git clone <repository-url>
-cd mcp-documentation-server-ts
+cd mcp-documentation-server
 npm install
 npm run build
+```
+
+## ⚙️ Configuration
+
+### Embedding Model Configuration
+
+The embedding model is configured via the `MCP_EMBEDDING_MODEL` environment variable:
+
+```bash
+# Default model (fast startup, good quality)
+export MCP_EMBEDDING_MODEL="Xenova/all-MiniLM-L6-v2"
+
+# Recommended model (best quality, multilingual)
+export MCP_EMBEDDING_MODEL="Xenova/paraphrase-multilingual-mpnet-base-v2"
+```
+
+**Available Models:**
+- `Xenova/all-MiniLM-L6-v2` (default): Fast startup, 384 dimensions, good quality
+- `Xenova/paraphrase-multilingual-mpnet-base-v2` (recommended): Best quality, 768 dimensions, multilingual
+
+**⚠️ IMPORTANT**: Different embedding models produce incompatible vectors. If you change the model, you must re-add all documents for consistent search results.
+
+### Other Environment Variables
+
+```bash
+# Data directory (default: ./data)
+export MCP_DATA_DIR="/path/to/your/data"
+
+# Maximum document size (default: 1MB)
+export MCP_MAX_DOCUMENT_SIZE="2097152"
+
+# Default search limit (default: 10)
+export MCP_SEARCH_LIMIT="20"
 ```
 
 ## 💻 Usage
@@ -212,7 +266,7 @@ Add to your Claude Desktop configuration:
   "mcpServers": {
     "documentation": {
       "command": "npx",
-      "args": ["tsx", "/path/to/mcp-documentation-server-ts/src/server.ts"]
+      "args": ["tsx", "/path/to/mcp-documentation-server/src/server.ts"]
     }
   }
 }
@@ -290,6 +344,54 @@ Process uploads → Creates document with chunks and embeddings
 Search for "variables" in the python-tutorial document
 ```
 
+## ⚠️ Troubleshooting
+
+### MCP Timeout Errors
+
+If you encounter `MCP error -32001: Request timed out` when adding documents, this is normal behavior:
+
+**Why it happens:**
+- The server uses `paraphrase-multilingual-mpnet-base-v2` model which downloads ~420MB on first use
+- MCP clients have a 60-second timeout by default
+- The operation completes successfully in the background even after timeout
+
+**Solutions:**
+1. **Wait for completion**: The document is still being processed even after timeout
+2. **Check document list**: Use `list_documents` to verify successful processing
+3. **Use smaller model**: Switch to `Xenova/all-MiniLM-L6-v2` for faster processing:
+   ```json
+   {
+     "modelName": "Xenova/all-MiniLM-L6-v2"
+   }
+   ```
+4. **Pre-warm the model**: Add a simple document first to download the model
+
+**Model Loading Times:**
+- `paraphrase-multilingual-mpnet-base-v2`: 2-5 minutes first time (better quality)
+- `all-MiniLM-L6-v2`: 30-60 seconds first time (faster, good quality)
+
+The server uses lazy loading so models download only when first needed, preventing startup delays.
+
+### Embedding Model Compatibility
+
+**🚨 CRITICAL**: Embeddings from different models are completely incompatible:
+
+**Why incompatible:**
+- Different vector dimensions (384 vs 768)
+- Different semantic spaces and training data  
+- Cannot mix or reuse embeddings between models
+
+**When switching models:**
+1. **Clear understanding**: Old documents keep old embeddings
+2. **Search inconsistency**: Mixed embeddings give poor results
+3. **Solution**: Re-add all documents with new model
+
+**Best practices:**
+- Choose your model early in development
+- Use `all-MiniLM-L6-v2` for development (faster)
+- Use `paraphrase-multilingual-mpnet-base-v2` for production (better quality)
+- Avoid switching models on existing datasets
+
 ## 🔧 Configuration
 
 ### Environment Variables
@@ -342,7 +444,7 @@ Test the server using MCP CLI:
 npm install -g @modelcontextprotocol/cli
 
 # Test the server
-mcp-cli run npx mcp-documentation-server-ts
+mcp-cli run npx mcp-documentation-server
 ```
 
 ## Configuration
@@ -415,9 +517,13 @@ data/
 - **zod**: Runtime type validation
 - **fs-extra**: Enhanced file system operations
 
-## Development
+## 🔧 Development
 
 ```bash
+# Clone the repository
+git clone https://github.com/andrea9293/mcp-documentation-server.git
+cd mcp-documentation-server
+
 # Install dependencies
 npm install
 
@@ -431,13 +537,40 @@ npm run dev
 npm run inspect
 ```
 
-## License
+## 🚀 Release Process
+
+This project uses semantic-release for automated publishing:
+
+1. **Commit Message Format**: Follow [Conventional Commits](https://www.conventionalcommits.org/):
+   - `feat:` for new features (minor version bump)
+   - `fix:` for bug fixes (patch version bump)
+   - `feat!:` or `fix!:` for breaking changes (major version bump)
+
+2. **Automatic Release**: Pushing to `main` branch triggers:
+   - Version calculation based on commit messages
+   - CHANGELOG.md generation
+   - GitHub release creation
+   - NPM package publishing
+
+3. **Manual Release**: Create and push a git tag:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+## 📄 License
 
 MIT
 
-## Contributing
+## 🤝 Contributing
 
-Contributions are welcome! Please read the contributing guidelines and submit pull requests for any improvements.
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m 'feat: add amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+For bug reports and feature requests, please use the [GitHub Issues](https://github.com/andrea9293/mcp-documentation-server/issues).
 
 ## Support
 

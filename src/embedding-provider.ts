@@ -10,7 +10,7 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
     private initPromise: Promise<void> | null = null;
 
     constructor(
-        private modelName: string = 'Xenova/paraphrase-multilingual-mpnet-base-v2'
+        private modelName: string = 'Xenova/all-MiniLM-L6-v2'
     ) { }
 
     private async initialize(): Promise<void> {
@@ -23,11 +23,11 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
 
         this.initPromise = this.doInitialize();
         await this.initPromise;
-    }    private async doInitialize(): Promise<void> {
+    } private async doInitialize(): Promise<void> {
         try {
             console.error(`Initializing embedding model: ${this.modelName}`);
             console.error('This may take a few minutes for larger models...');
-            
+
             // Create a timeout promise
             const timeoutPromise = new Promise<never>((_, reject) => {
                 setTimeout(() => {
@@ -40,13 +40,30 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
                 pipeline('feature-extraction', this.modelName),
                 timeoutPromise
             ]);
-            
+
             this.isInitialized = true;
             console.error('Embedding model initialized successfully');
         } catch (error) {
             console.error('Failed to initialize embedding model:', error);
             throw new Error(`Failed to initialize embedding model: ${error}`);
         }
+    }
+
+    /**
+     * Pre-initialize the model in background without waiting
+     * This helps avoid timeouts on first use
+     */
+    async preInitialize(): Promise<void> {
+        if (this.isInitialized || this.initPromise) return;
+
+        console.error(`Pre-initializing embedding model: ${this.modelName}`);
+        console.error('This will happen in background to avoid timeouts...');
+
+        // Start initialization but don't wait for it
+        this.initialize().catch(error => {
+            console.error('Pre-initialization failed, will retry on first use:', error);
+            this.initPromise = null; // Reset to allow retry
+        });
     }
 
     async generateEmbedding(text: string): Promise<number[]> {
@@ -126,61 +143,61 @@ export class SimpleEmbeddingProvider implements EmbeddingProvider {
  * Factory function to create the best available embedding provider
  */
 export async function createEmbeddingProvider(modelName?: string): Promise<EmbeddingProvider> {
-  const defaultModel = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
-  const fallbackModel = 'Xenova/all-MiniLM-L6-v2';
-  
-  // For faster initialization, try the smaller model first if no specific model is requested
-  const modelsToTry = modelName 
-    ? [modelName, fallbackModel] 
-    : [fallbackModel, defaultModel]; // Try smaller model first for faster startup
-  
-  for (const model of modelsToTry) {
-    try {
-      console.error(`Attempting to load embedding model: ${model}`);
-      
-      const provider = new TransformersEmbeddingProvider(model);
-      
-      // Create a shorter timeout for testing if model loads
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          reject(new Error('Model test timed out'));
-        }, modelName ? 3 * 60 * 1000 : 60 * 1000); // 3 min for specific model, 1 min for auto-selection
-      });
+    const defaultModel = 'Xenova/all-MiniLM-L6-v2';
+    const fallbackModel = 'Xenova/paraphrase-multilingual-mpnet-base-v2';
 
-      // Test if the model works with a timeout
-      await Promise.race([
-        provider.generateEmbedding('test'),
-        timeoutPromise
-      ]);
-      
-      console.error(`Successfully loaded embedding model: ${model}`);
-      return provider;
-    } catch (error) {
-      console.error(`Failed to load model ${model}:`, error);
-      
-      // If this was the last model to try, continue to simple embeddings
-      if (model === modelsToTry[modelsToTry.length - 1]) {
-        break;
-      }
+    // For faster initialization, try the smaller model first if no specific model is requested
+    const modelsToTry = modelName
+        ? [modelName, fallbackModel]
+        : [fallbackModel, defaultModel]; // Try smaller model first for faster startup
+
+    for (const model of modelsToTry) {
+        try {
+            console.error(`Attempting to load embedding model: ${model}`);
+
+            const provider = new TransformersEmbeddingProvider(model);
+
+            // Create a shorter timeout for testing if model loads
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                setTimeout(() => {
+                    reject(new Error('Model test timed out'));
+                }, modelName ? 3 * 60 * 1000 : 60 * 1000); // 3 min for specific model, 1 min for auto-selection
+            });
+
+            // Test if the model works with a timeout
+            await Promise.race([
+                provider.generateEmbedding('test'),
+                timeoutPromise
+            ]);
+
+            console.error(`Successfully loaded embedding model: ${model}`);
+            return provider;
+        } catch (error) {
+            console.error(`Failed to load model ${model}:`, error);
+
+            // If this was the last model to try, continue to simple embeddings
+            if (model === modelsToTry[modelsToTry.length - 1]) {
+                break;
+            }
+        }
     }
-  }
-  
-  // Final fallback to simple embeddings
-  console.error('All transformer models failed, falling back to simple embeddings');
-  return new SimpleEmbeddingProvider();
+
+    // Final fallback to simple embeddings
+    console.error('All transformer models failed, falling back to simple embeddings');
+    return new SimpleEmbeddingProvider();
 }
 
 /**
  * Create embedding provider with specific model
  */
 export async function createEmbeddingProviderWithModel(modelName: string): Promise<EmbeddingProvider> {
-  return createEmbeddingProvider(modelName);
+    return createEmbeddingProvider(modelName);
 }
 
 /**
  * Create embedding provider with lazy initialization (no immediate test)
  */
 export function createLazyEmbeddingProvider(modelName?: string): EmbeddingProvider {
-  const defaultModel = 'Xenova/all-MiniLM-L6-v2'; // Use smaller model as default for faster startup
-  return new TransformersEmbeddingProvider(modelName || defaultModel);
+    const defaultModel = 'Xenova/all-MiniLM-L6-v2'; // Use smaller model as default for faster startup
+    return new TransformersEmbeddingProvider(modelName || defaultModel);
 }

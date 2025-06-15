@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "documentation": {
+      "command": "npx",
+      "args": [
+        "@andrea9293/mcp-documentation-server"
+      ],
+      "env": {
+        "MCP_EMBEDDING_MODEL": "Xenova/paraphrase-multilingual-mpnet-base-v2"
+      }
+    }
+  }
+}
