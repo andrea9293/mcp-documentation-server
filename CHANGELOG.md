@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.0.0...v1.1.0) (2025-06-15)
+
+
+### Features
+
+* add publishConfig to package.json for public access ([4602c1e](https://github.com/andrea9293/mcp-documentation-server/commit/4602c1e6fa093a5605a2bcaa216c42c8beb1aed9))
+
 # 1.0.0 (2025-06-15)
 
 
