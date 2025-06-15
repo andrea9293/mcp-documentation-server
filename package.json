@@ -61,5 +61,8 @@
     "fs-extra": "^11.3.0",
     "glob": "^11.0.3",
     "zod": "^3.25.64"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
