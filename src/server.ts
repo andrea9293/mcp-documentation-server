@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { FastMCP } from "fastmcp";
 import { z } from "zod";
 import { existsSync, mkdirSync } from "fs";
@@ -409,6 +411,19 @@ class DocumentManager {
             throw new Error(`Failed to list uploads files: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
+
+    async deleteDocument(documentId: string): Promise<boolean> {
+        try {
+            const documentPath = this.getDocumentPath(documentId);
+            if (existsSync(documentPath)) {
+                await import('fs/promises').then(fs => fs.unlink(documentPath));
+                return true;
+            }
+        } catch (error) {
+            console.error('Error deleting document:', error);
+        }
+        return false;
+    }
 }
 
 // Initialize server
@@ -599,6 +614,37 @@ server.addTool({
             return JSON.stringify(fileList, null, 2);
         } catch (error) {
             throw new Error(`Failed to list uploads files: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    },
+});
+
+// Delete document tool
+server.addTool({
+    name: "delete_document",
+    description: "Delete a document from the collection",
+    parameters: z.object({
+        id: z.string().describe("Document ID to delete")
+    }),
+    execute: async ({ id }) => {
+        try {
+            const manager = await initializeDocumentManager();
+            
+            // Check if document exists first
+            const document = await manager.getDocument(id);
+            if (!document) {
+                return `Document not found: ${id}`;
+            }
+
+            // Delete the document
+            const success = await manager.deleteDocument(id);
+            
+            if (success) {
+                return `Document "${document.title}" (${id}) has been deleted successfully.`;
+            } else {
+                throw new Error("Failed to delete document");
+            }
+        } catch (error) {
+            throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : String(error)}`);
         }
     },
 });

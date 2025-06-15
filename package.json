@@ -1,11 +1,11 @@
 {
   "name": "@andrea9293/mcp-documentation-server",
   "version": "1.1.1",
-  "description": "A TypeScript MCP server for document management and semantic search with embeddings",
-  "main": "dist/index.js",
+  "description": "A TypeScript MCP server for document management and semantic search with embeddings",  
+  "main": "dist/server.js",
   "type": "module",
   "bin": {
-    "mcp-documentation-server": "dist/index.js"
+    "mcp-documentation-server": "dist/server.js"
   },
   "homepage": "https://github.com/andrea9293/mcp-documentation-server#readme",
   "repository": {
@@ -20,7 +20,7 @@
     "start": "tsx src/server.ts",
     "dev": "fastmcp dev src/server.ts",
     "dev:direct": "npx tsx src/server.ts",
-    "dev:build": "npm run build && node dist/index.js",
+    "dev:build": "npm run build && node dist/server.js",
     "inspect": "npx fastmcp inspect src/server.ts",
     "test": "echo \"Warning: no test specified\" && exit 0",
     "prepare": "npm run build"
