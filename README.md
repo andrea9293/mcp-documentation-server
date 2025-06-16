@@ -20,7 +20,13 @@ Add to your MCP client configuration (e.g., Claude Desktop):
   "mcpServers": {
     "documentation": {
       "command": "npx",
-      "args": ["@andrea9293/mcp-documentation-server"]
+      "args": [
+        "-y",
+        "@andrea9293/mcp-documentation-server"
+      ],
+      "env": {
+        "MCP_EMBEDDING_MODEL": "Xenova/all-MiniLM-L6-v2"
+      }
     }
   }
 }
