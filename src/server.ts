@@ -8,6 +8,7 @@ import * as path from "path";
 import { glob } from "glob";
 import { pipeline } from '@xenova/transformers';
 import { createLazyEmbeddingProvider } from './embedding-provider.js';
+import { pdfToText } from 'pdf-ts';
 
 // Types
 interface DocumentChunk {
@@ -305,16 +306,36 @@ class DocumentManager {
 
     private generateId(): string {
         return Math.random().toString(36).substr(2, 9);
+    }    
+    
+    /**
+     * Extract text content from a PDF file
+     * @param filePath Path to the PDF file
+     * @returns Extracted text content
+     */
+    private async extractTextFromPdf(filePath: string): Promise<string> {
+        try {
+            const dataBuffer = await readFile(filePath);
+            const text = await pdfToText(dataBuffer);
+            
+            if (!text || text.trim().length === 0) {
+                throw new Error('No text found in PDF or PDF might be image-based');
+            }
+            
+            return text;
+        } catch (error) {
+            throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     async processUploadsFolder(): Promise<{ processed: number; errors: string[] }> {
-        const supportedExtensions = ['.txt', '.md'];
+        const supportedExtensions = ['.txt', '.md', '.pdf'];
         const errors: string[] = [];
         let processed = 0;
 
         try {
             // Get all supported files from uploads directory
-            const pattern = this.uploadsDir.replace(/\\/g, '/') + "/*{.txt,.md}";
+            const pattern = this.uploadsDir.replace(/\\/g, '/') + "/*{.txt,.md,.pdf}";
             const files = await glob(pattern);
 
             for (const filePath of files) {
@@ -326,11 +347,18 @@ class DocumentManager {
                         continue;
                     }
 
-                    // Read file content
-                    const content = await readFile(filePath, 'utf-8');
+                    let content: string;
+
+                    // Extract content based on file type
+                    if (fileExtension === '.pdf') {
+                        content = await this.extractTextFromPdf(filePath);
+                    } else {
+                        // For .txt and .md files
+                        content = await readFile(filePath, 'utf-8');
+                    }
 
                     if (!content.trim()) {
-                        errors.push(`File ${fileName} is empty`);
+                        errors.push(`File ${fileName} is empty or contains no extractable text`);
                         continue;
                     }
 
@@ -380,7 +408,7 @@ class DocumentManager {
     }
 
     async listUploadsFiles(): Promise<{ name: string; size: number; modified: string; supported: boolean }[]> {
-        const supportedExtensions = ['.txt', '.md'];
+        const supportedExtensions = ['.txt', '.md', '.pdf'];
         const files: { name: string; size: number; modified: string; supported: boolean }[] = [];
 
         try {
@@ -388,21 +416,17 @@ class DocumentManager {
             const filePaths = await glob(pattern);
 
             for (const filePath of filePaths) {
-                try {
-                    const stats = await import('fs/promises').then(fs => fs.stat(filePath));
-                    if (stats.isFile()) {
-                        const fileName = path.basename(filePath);
-                        const fileExtension = path.extname(fileName).toLowerCase();
-
-                        files.push({
-                            name: fileName,
-                            size: stats.size,
-                            modified: stats.mtime.toISOString(),
-                            supported: supportedExtensions.includes(fileExtension)
-                        });
-                    }
-                } catch (error) {
-                    // Skip files that can't be accessed
+                const stats = await import('fs/promises').then(fs => fs.stat(filePath));
+                if (stats.isFile()) {
+                    const fileName = path.basename(filePath);
+                    const fileExtension = path.extname(fileName).toLowerCase();
+                    
+                    files.push({
+                        name: fileName,
+                        size: stats.size,
+                        modified: stats.mtime.toISOString(),
+                        supported: supportedExtensions.includes(fileExtension)
+                    });
                 }
             }
 
@@ -419,10 +443,10 @@ class DocumentManager {
                 await import('fs/promises').then(fs => fs.unlink(documentPath));
                 return true;
             }
+            return false;
         } catch (error) {
-            console.error('Error deleting document:', error);
+            throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : String(error)}`);
         }
-        return false;
     }
 }
 

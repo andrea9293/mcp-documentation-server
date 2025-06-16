@@ -60,6 +60,7 @@
     "fastmcp": "^1.27.3",
     "fs-extra": "^11.3.0",
     "glob": "^11.0.3",
+    "pdf-ts": "^0.0.2",
     "zod": "^3.25.64"
   },
   "publishConfig": {
