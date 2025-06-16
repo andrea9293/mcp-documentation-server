@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.3.0...v1.4.0) (2025-06-16)
+
+
+### Features
+
+* enhance file upload support and improve directory management in DocumentManager ([2d1a9c9](https://github.com/andrea9293/mcp-documentation-server/commit/2d1a9c9cad2887c9fcfba57fb53c68ea9e6f1aa6))
+
 # [1.3.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.2.0...v1.3.0) (2025-06-16)
 
 
