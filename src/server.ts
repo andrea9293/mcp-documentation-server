@@ -9,6 +9,7 @@ import { glob } from "glob";
 import { pipeline } from '@xenova/transformers';
 import { createLazyEmbeddingProvider } from './embedding-provider.js';
 import { pdfToText } from 'pdf-ts';
+import { getDefaultDataDir } from './utils.js';
 
 // Types
 interface DocumentChunk {
@@ -140,11 +141,13 @@ class SimpleEmbeddingProvider implements EmbeddingProvider {
 class DocumentManager {
     private dataDir: string;
     private uploadsDir: string;
-    private embeddingProvider: EmbeddingProvider;
-
-    constructor(dataDir = "./data", uploadsDir = "./uploads", embeddingProvider?: EmbeddingProvider) {
-        this.dataDir = dataDir;
-        this.uploadsDir = uploadsDir;
+    private embeddingProvider: EmbeddingProvider;    
+      constructor(embeddingProvider?: EmbeddingProvider) {
+        // Always use default paths
+        const baseDir = getDefaultDataDir();
+        this.dataDir = path.join(baseDir, 'data');
+        this.uploadsDir = path.join(baseDir, 'uploads');
+        
         this.embeddingProvider = embeddingProvider || new SimpleEmbeddingProvider();
         this.ensureDataDir();
         this.ensureUploadsDir();
@@ -159,7 +162,19 @@ class DocumentManager {
     private ensureUploadsDir(): void {
         if (!existsSync(this.uploadsDir)) {
             mkdirSync(this.uploadsDir, { recursive: true });
-        }    } getUploadsPath(): string {
+        }
+    }
+
+    // Getter methods for directory paths
+    getDataDir(): string {
+        return path.resolve(this.dataDir);
+    }
+
+    getUploadsDir(): string {
+        return path.resolve(this.uploadsDir);
+    }
+
+    getUploadsPath(): string {
         return path.resolve(this.uploadsDir);
     }
 
@@ -464,8 +479,11 @@ async function initializeDocumentManager() {
         // Get embedding model from environment variable
         const embeddingModel = process.env.MCP_EMBEDDING_MODEL || 'Xenova/all-MiniLM-L6-v2';
         const embeddingProvider = createLazyEmbeddingProvider(embeddingModel);
-        documentManager = new DocumentManager("./data", "./uploads", embeddingProvider);
+          // Constructor will use default paths automatically
+        documentManager = new DocumentManager(embeddingProvider);
         console.error(`Document manager initialized with: ${embeddingProvider.getModelName()} (lazy loading)`);
+        console.error(`Data directory: ${documentManager.getDataDir()}`);
+        console.error(`Uploads directory: ${documentManager.getUploadsDir()}`);
     }
     return documentManager;
 }

@@ -36,11 +36,11 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 
 - 📄 **Document Management** - Add, list, retrieve, and delete documents with metadata
 - 🔍 **Semantic Search** - AI-powered search using embeddings  
-- 📁 **File Upload** - Drop .txt/.md files in uploads folder for processing
+- 📁 **File Upload** - Drop .txt/.md/.pdf files in uploads folder for processing
 - 🧩 **Smart Chunking** - Automatic text splitting for better search accuracy
 - 🗑️ **Document Deletion** - Clean removal of documents and their chunks
 - 🌍 **Multilingual** - Supports multiple languages with quality embeddings
-- 💾 **Local Storage** - All data stored locally in JSON format
+- 💾 **Local Storage** - All data stored locally in `~/.mcp-documentation-server/` directory
 - ⚡ **Fast Setup** - No database required, works out of the box
 
 ## Available Tools
@@ -100,12 +100,26 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 
 ### File Upload Workflow
 
-1. Get uploads path: `get_uploads_path`
-2. Place your .txt/.md files in that folder
+1. Get uploads path: `get_uploads_path` (`~/.mcp-documentation-server/uploads/`)
+2. Place your .txt/.md/.pdf files in that folder
 3. Process files: `process_uploads`
 4. Search the processed documents
 
+**Supported file types:**
+- **.txt** - Plain text files
+- **.md** - Markdown files  
+- **.pdf** - PDF files (text extraction, no OCR)
+
 ## Configuration
+
+### Data Storage
+
+All documents and uploads are stored locally in:
+```
+~/.mcp-documentation-server/
+├── data/      # Document storage (JSON files)
+└── uploads/   # Files to process (.txt, .md, .pdf)
+```
 
 ### Embedding Models
 
@@ -115,14 +129,6 @@ Set via `MCP_EMBEDDING_MODEL` environment variable:
 - **`Xenova/paraphrase-multilingual-mpnet-base-v2`** (recommended) - Best quality, multilingual
 
 ⚠️ **Important**: Changing models requires re-adding all documents as embeddings are incompatible.
-
-### Other Environment Variables
-
-```bash
-MCP_DATA_DIR="/custom/data/path"           # Data storage location
-MCP_MAX_DOCUMENT_SIZE="2097152"            # Max file size (2MB)
-MCP_SEARCH_LIMIT="10"                      # Default search results limit
-```
 
 ## Installation Options
 
