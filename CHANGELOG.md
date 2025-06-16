@@ -1,3 +1,15 @@
+# [1.3.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.2.0...v1.3.0) (2025-06-16)
+
+
+### Bug Fixes
+
+* improve code readability by adding spacing in TransformersEmbeddingProvider ([40f8e14](https://github.com/andrea9293/mcp-documentation-server/commit/40f8e1488af37db919310a23d2b1a37f09a2e23c))
+
+
+### Features
+
+* add PDF text extraction support ([1fa17d9](https://github.com/andrea9293/mcp-documentation-server/commit/1fa17d9f8f8ee28bf69582b6377fbd9dac1da61e))
+
 # [1.2.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.1.1...v1.2.0) (2025-06-15)
 
 
