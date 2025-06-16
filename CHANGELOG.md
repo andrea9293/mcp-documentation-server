@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.4.0...v1.5.0) (2025-06-16)
+
+
+### Features
+
+* increase content preview length in get_document tool ([7920c59](https://github.com/andrea9293/mcp-documentation-server/commit/7920c595c82e5d2ba1d729363cae5d9868e6e3a6))
+
 # [1.4.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.3.0...v1.4.0) (2025-06-16)
 
 
