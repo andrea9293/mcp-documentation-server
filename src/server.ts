@@ -581,7 +581,7 @@ server.addTool({
                 created_at: doc.created_at,
                 updated_at: doc.updated_at,
                 metadata: doc.metadata,
-                content_preview: doc.content.substring(0, 100) + "...",
+                content_preview: doc.content.substring(0, 700) + "...",
                 chunks_count: doc.chunks.length,
             }));
 
