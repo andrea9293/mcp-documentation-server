@@ -23,7 +23,9 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
 
         this.initPromise = this.doInitialize();
         await this.initPromise;
-    } private async doInitialize(): Promise<void> {
+    } 
+    
+    private async doInitialize(): Promise<void> {
         try {
             console.error(`Initializing embedding model: ${this.modelName}`);
             console.error('This may take a few minutes for larger models...');
