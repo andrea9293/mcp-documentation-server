@@ -527,7 +527,7 @@ server.addTool({
             if (!document) {
                 throw new Error(`Document with ID '${args.document_id}' Not found. Use 'list_documents' to get all id of documents.`);
             }
-            const results = await manager.searchDocuments(args.document_id, args.limit);
+            const results = await manager.searchDocuments(args.document_id, args.query, args.limit);
 
             if (results.length === 0) {
                 return "No chunks found matching your query in the specified document.";
