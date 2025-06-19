@@ -1,3 +1,11 @@
+## [1.5.1](https://github.com/andrea9293/mcp-documentation-server/compare/v1.5.0...v1.5.1) (2025-06-19)
+
+
+### Bug Fixes
+
+* update document search logic and improve error handling ([7397bcf](https://github.com/andrea9293/mcp-documentation-server/commit/7397bcfe30c91541e94306caee7cc37771dc7c83))
+* update search_documents tool to include query parameter for improved search functionality ([ddf4e1c](https://github.com/andrea9293/mcp-documentation-server/commit/ddf4e1cc3e6ac4477408878fbbe6e4cd6918de8a))
+
 # [1.5.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.4.0...v1.5.0) (2025-06-16)
 
 
