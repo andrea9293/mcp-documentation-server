@@ -522,7 +522,12 @@ server.addTool({
     }), execute: async (args) => {
         try {
             const manager = await initializeDocumentManager();
-            const results = await manager.searchDocuments(args.document_id, args.query, args.limit);
+            // Controllo se il documento esiste prima di cercare
+            const document = await manager.getDocument(args.document_id);
+            if (!document) {
+                throw new Error(`Document with ID '${args.document_id}' Not found. Use 'list_documents' to get all id of documents.`);
+            }
+            const results = await manager.searchDocuments(args.document_id, args.limit);
 
             if (results.length === 0) {
                 return "No chunks found matching your query in the specified document.";
@@ -683,7 +688,7 @@ server.addTool({
             if (success) {
                 return `Document "${document.title}" (${id}) has been deleted successfully.`;
             } else {
-                throw new Error("Failed to delete document");
+                return `Document not found or already deleted: ${id}`;
             }
         } catch (error) {
             throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : String(error)}`);
