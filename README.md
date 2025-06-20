@@ -2,6 +2,11 @@
 
 A TypeScript-based [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that provides document management and semantic search capabilities. Upload documents, search them with AI embeddings, and integrate seamlessly with MCP clients like Claude Desktop.
 
+## Demo Video
+
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/GA28hib-Vj0/0.jpg)](https://www.youtube.com/watch?v=GA28hib-Vj0)
+
+
 ## Quick Start
 
 ### 1. Install and Run
