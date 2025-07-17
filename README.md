@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/andrea9293-mcp-documentation-server-badge.png)](https://mseep.ai/app/andrea9293-mcp-documentation-server)
+
 # MCP Documentation Server
 
 A TypeScript-based [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that provides document management and semantic search capabilities. Upload documents, search them with AI embeddings, and integrate seamlessly with MCP clients like Claude Desktop.
