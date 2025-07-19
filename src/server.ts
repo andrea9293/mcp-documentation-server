@@ -422,7 +422,7 @@ server.addTool({
 // Get document tool
 server.addTool({
     name: "get_document",
-    description: "Retrieve a specific document by ID",
+    description: "Retrieve a specific document by ID. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
     parameters: z.object({
         id: z.string().describe("The document ID"),
     }), execute: async (args) => {
