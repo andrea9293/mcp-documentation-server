@@ -7,6 +7,7 @@ import { existsSync, mkdirSync } from "fs";
 import { writeFile, readFile } from "fs/promises";
 import * as path from "path";
 import { glob } from "glob";
+import { createLazyEmbeddingProvider, SimpleEmbeddingProvider } from './embedding-provider.js';
 import { EmbeddingProvider } from './types.js';
 import { IntelligentChunker } from './intelligent-chunker.js';
 import { pdfToText } from 'pdf-ts';
@@ -18,9 +19,10 @@ interface DocumentChunk {
     document_id: string;
     chunk_index: number;
     content: string;
-    embeddings: number[];
+    embeddings?: number[];
     start_position: number;
     end_position: number;
+    metadata?: Record<string, any>;
 }
 
 interface Document {
@@ -36,106 +38,6 @@ interface Document {
 interface SearchResult {
     chunk: DocumentChunk;
     score: number;
-}
-
-// Embedding Provider Interface
-interface EmbeddingProvider {
-    generateEmbedding(text: string): Promise<number[]>;
-    isAvailable(): boolean;
-    getModelName(): string;
-}
-
-// Transformers embedding provider using @xenova/transformers
-class TransformersEmbeddingProvider implements EmbeddingProvider {
-    private pipeline: any = null;
-    private isInitialized = false;
-    private initPromise: Promise<void> | null = null;
-
-    constructor(private modelName: string = 'Xenova/all-MiniLM-L6-v2') { }
-
-    private async initialize(): Promise<void> {
-        if (this.isInitialized) return;
-
-        if (this.initPromise) {
-            await this.initPromise;
-            return;
-        }
-
-        this.initPromise = this.doInitialize();
-        await this.initPromise;
-    }
-
-    private async doInitialize(): Promise<void> {
-        try {
-            console.error(`Initializing embedding model: ${this.modelName}`);
-            this.pipeline = await pipeline('feature-extraction', this.modelName);
-            this.isInitialized = true;
-            console.error('Embedding model initialized successfully');
-        } catch (error) {
-            console.error('Failed to initialize embedding model:', error);
-            throw new Error(`Failed to initialize embedding model: ${error}`);
-        }
-    }
-
-    async generateEmbedding(text: string): Promise<number[]> {
-        await this.initialize();
-
-        if (!this.pipeline) {
-            throw new Error('Embedding pipeline not initialized');
-        }
-
-        try {
-            const output = await this.pipeline(text, {
-                pooling: 'mean',
-                normalize: true,
-            });
-
-            return Array.from(output.data as Float32Array);
-        } catch (error) {
-            console.error('Error generating embedding:', error);
-            throw new Error(`Failed to generate embedding: ${error}`);
-        }
-    }
-
-    isAvailable(): boolean {
-        return this.isInitialized && this.pipeline !== null;
-    }
-
-    getModelName(): string {
-        return this.modelName;
-    }
-}
-
-// Simple embedding provider (hash-based fallback)
-class SimpleEmbeddingProvider implements EmbeddingProvider {
-    async generateEmbedding(text: string): Promise<number[]> {
-        // Simple hash-based embedding as fallback
-        const hash = this.simpleHash(text);
-        const embedding = new Array(384).fill(0);
-
-        // Use hash to seed the embedding
-        for (let i = 0; i < 384; i++) {
-            embedding[i] = Math.sin(hash * (i + 1)) * 0.1;
-        }
-
-        return embedding;
-    } private simpleHash(str: string): number {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            const char = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // Convert to 32bit integer
-        }
-        return Math.abs(hash);
-    }
-
-    isAvailable(): boolean {
-        return true;
-    }
-
-    getModelName(): string {
-        return 'Simple Hash-based Embeddings';
-    }
 }
 
 // Document Manager
@@ -211,62 +113,7 @@ class DocumentManager {
         await writeFile(this.getDocumentPath(id), JSON.stringify(document, null, 2));
         return document;
     }
-    private async createChunks(documentId: string, content: string): Promise<DocumentChunk[]> {
-        const chunkSize = 700; // characters per chunk
-        const chunks: DocumentChunk[] = [];
 
-        // Split content into sentences/paragraphs for better chunking
-        const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 0);
-
-        let currentChunk = "";
-        let chunkIndex = 0;
-        let startPosition = 0;
-
-        for (const sentence of sentences) {
-            const trimmedSentence = sentence.trim();
-            if (!trimmedSentence) continue;
-
-            // If adding this sentence would exceed chunk size, save current chunk
-            if (currentChunk.length + trimmedSentence.length > chunkSize && currentChunk.length > 0) {
-                const embeddings = await this.embeddingProvider.generateEmbedding(currentChunk);
-                const endPosition = startPosition + currentChunk.length;
-
-                chunks.push({
-                    id: `${documentId}_chunk_${chunkIndex}`,
-                    document_id: documentId,
-                    chunk_index: chunkIndex,
-                    content: currentChunk.trim(),
-                    embeddings,
-                    start_position: startPosition,
-                    end_position: endPosition,
-                });
-
-                startPosition = endPosition;
-                currentChunk = trimmedSentence + ".";
-                chunkIndex++;
-            } else {
-                currentChunk += (currentChunk ? " " : "") + trimmedSentence + ".";
-            }
-        }
-
-        // Add the last chunk if it has content
-        if (currentChunk.trim()) {
-            const embeddings = await this.embeddingProvider.generateEmbedding(currentChunk);
-            const endPosition = startPosition + currentChunk.length;
-
-            chunks.push({
-                id: `${documentId}_chunk_${chunkIndex}`,
-                document_id: documentId,
-                chunk_index: chunkIndex,
-                content: currentChunk.trim(),
-                embeddings,
-                start_position: startPosition,
-                end_position: endPosition,
-            });
-        }
-
-        return chunks;
-    }
     async getDocument(id: string): Promise<Document | null> {
         try {
             const data = await readFile(this.getDocumentPath(id), 'utf-8');
@@ -302,9 +149,10 @@ class DocumentManager {
         }
 
         const results: SearchResult[] = document.chunks
+            .filter(chunk => chunk.embeddings && chunk.embeddings.length > 0)
             .map(chunk => ({
                 chunk,
-                score: this.cosineSimilarity(queryEmbedding, chunk.embeddings)
+                score: this.cosineSimilarity(queryEmbedding, chunk.embeddings!)
             }))
             .sort((a, b) => b.score - a.score)
             .slice(0, limit);

@@ -62,7 +62,7 @@ export class IntelligentChunker {
         // Set default options based on content type
         const mergedOptions = this.getOptimalOptions(contentType, options);
         
-        console.error(`[IntelligentChunker] old Processing ${contentType} content with ${mergedOptions.maxSize} max size`);
+        console.error(`[IntelligentChunker] Processing ${contentType} content with ${mergedOptions.maxSize} max size`);
         
         let chunks: DocumentChunk[];
         
