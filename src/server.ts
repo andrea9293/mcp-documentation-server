@@ -122,6 +122,15 @@ class DocumentManager {
             return null;
         }
     }
+    
+    async getOnlyContentDocument(id: string): Promise<Document | null> {
+        try {
+            const data = await readFile(this.getDocumentPath(id), 'utf-8');
+            return JSON.parse(data).content;
+        } catch {
+            return null;
+        }
+    }
     async getAllDocuments(): Promise<Document[]> {
         // Use forward slashes for glob pattern to work on all platforms
         const globPattern = this.dataDir.replace(/\\/g, '/') + "/*.json";
@@ -415,7 +424,7 @@ server.addTool({
     }), execute: async (args) => {
         try {
             const manager = await initializeDocumentManager();
-            const document = await manager.getDocument(args.id);
+            const document = await manager.getOnlyContentDocument(args.id);
 
             if (!document) {
                 return `Document with ID ${args.id} not found.`;
