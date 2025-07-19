@@ -1,3 +1,20 @@
+# [1.6.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.5.1...v1.6.0) (2025-07-19)
+
+
+### Bug Fixes
+
+* add dotenv import to load environment variables from .env files ([b91f578](https://github.com/andrea9293/mcp-documentation-server/commit/b91f5781bd3fe6d3c7bc89511d2560bb4fc37d3e))
+
+
+### Features
+
+* add get_context_window tool to retrieve surrounding chunks of a document ([c92f530](https://github.com/andrea9293/mcp-documentation-server/commit/c92f530cf6dac48ab91bf6bc8358222ef6e54fe4))
+* add getOnlyContentDocument method and get_context_window tool; enhance EmbeddingProvider with getDimensions ([f94746b](https://github.com/andrea9293/mcp-documentation-server/commit/f94746bd1b2b6e8bdc63e8e3e0c0259c174dd50c))
+* enhance embedding providers with model dimensions and lazy initialization ([d8b3321](https://github.com/andrea9293/mcp-documentation-server/commit/d8b3321cac4a02fc60d3447ef94a91f5ebf7b975))
+* enhance search_documents tool with truncation notice and context retrieval hint ([8750830](https://github.com/andrea9293/mcp-documentation-server/commit/8750830b9f62ecc86f29d7b6bc73bc3ee93240a5))
+* implement intelligent chunking for document processing ([d7dc3c9](https://github.com/andrea9293/mcp-documentation-server/commit/d7dc3c94d246bc16beda982b19bbcace6772c46f))
+* update README to enhance feature descriptions and add context window retrieval example ([77514d8](https://github.com/andrea9293/mcp-documentation-server/commit/77514d8b312d5f297eda823711657deb6b20bc0c))
+
 ## [1.5.1](https://github.com/andrea9293/mcp-documentation-server/compare/v1.5.0...v1.5.1) (2025-06-19)
 
 
