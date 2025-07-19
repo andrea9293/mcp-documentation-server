@@ -7,8 +7,8 @@ import { existsSync, mkdirSync } from "fs";
 import { writeFile, readFile } from "fs/promises";
 import * as path from "path";
 import { glob } from "glob";
-import { pipeline } from '@xenova/transformers';
-import { createLazyEmbeddingProvider } from './embedding-provider.js';
+import { EmbeddingProvider } from './types.js';
+import { IntelligentChunker } from './intelligent-chunker.js';
 import { pdfToText } from 'pdf-ts';
 import { getDefaultDataDir } from './utils.js';
 
@@ -142,14 +142,17 @@ class SimpleEmbeddingProvider implements EmbeddingProvider {
 class DocumentManager {
     private dataDir: string;
     private uploadsDir: string;
-    private embeddingProvider: EmbeddingProvider;    
-      constructor(embeddingProvider?: EmbeddingProvider) {
+    private embeddingProvider: EmbeddingProvider;
+    private intelligentChunker: IntelligentChunker;
+    
+    constructor(embeddingProvider?: EmbeddingProvider) {
         // Always use default paths
         const baseDir = getDefaultDataDir();
         this.dataDir = path.join(baseDir, 'data');
         this.uploadsDir = path.join(baseDir, 'uploads');
         
         this.embeddingProvider = embeddingProvider || new SimpleEmbeddingProvider();
+        this.intelligentChunker = new IntelligentChunker(this.embeddingProvider);
         this.ensureDataDir();
         this.ensureUploadsDir();
     }
@@ -187,8 +190,13 @@ class DocumentManager {
         const id = this.generateId();
         const now = new Date().toISOString();
 
-        // Create chunks from the content
-        const chunks = await this.createChunks(id, content);
+        // Create chunks using intelligent chunker
+        const chunks = await this.intelligentChunker.createChunks(id, content, {
+            maxSize: 500,
+            overlap: 75,
+            adaptiveSize: true,
+            addContext: true
+        });
 
         const document: Document = {
             id,
@@ -535,13 +543,13 @@ server.addTool({
             }
 
             const searchResults = results.map(result => ({
-                chunk_id: result.chunk.id,
+                // chunk_id: result.chunk.id,
                 document_id: result.chunk.document_id,
                 chunk_index: result.chunk.chunk_index,
                 score: result.score,
                 content: result.chunk.content,
-                start_position: result.chunk.start_position,
-                end_position: result.chunk.end_position,
+                // start_position: result.chunk.start_position,
+                // end_position: result.chunk.end_position,
             }));
             return JSON.stringify(searchResults, null, 2);
         } catch (error) {
