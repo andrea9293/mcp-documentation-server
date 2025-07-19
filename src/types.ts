@@ -54,6 +54,7 @@ export interface EmbeddingProvider {
     generateEmbedding(text: string): Promise<number[]>;
     isAvailable(): boolean;
     getModelName(): string;
+    getDimensions(): number;
 }
 
 export interface DocumentStorage {

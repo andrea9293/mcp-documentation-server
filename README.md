@@ -47,27 +47,30 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 
 ## Features
 
-- 📄 **Document Management** - Add, list, retrieve, and delete documents with metadata
-- 🔍 **Semantic Search** - AI-powered search using embeddings  
-- 📁 **File Upload** - Drop .txt/.md/.pdf files in uploads folder for processing
-- 🧩 **Smart Chunking** - Automatic text splitting for better search accuracy
-- 🗑️ **Document Deletion** - Clean removal of documents and their chunks
-- 🌍 **Multilingual** - Supports multiple languages with quality embeddings
-- 💾 **Local Storage** - All data stored locally in `~/.mcp-documentation-server/` directory
-- ⚡ **Fast Setup** - No database required, works out of the box
+ - 📄 **Document Management** - Add, list, retrieve, and delete documents with metadata
+ - 🔍 **Semantic Search** - AI-powered search using embeddings
+ - 🧠 **Intelligent Chunking** - Documents are automatically split into context-aware chunks for better search accuracy and context retrieval
+ - 🧩 **Context Window Retrieval** - Retrieve a window of chunks around a relevant chunk to get more context for your queries
+ - � **LLM Guidance** - The search tool provides hints to LLMs on how to use context windowing for better answers
+ - 📁 **File Upload** - Drop .txt/.md/.pdf files in uploads folder for processing
+ - 🗑️ **Document Deletion** - Clean removal of documents and their chunks
+ - 🌍 **Multilingual** - Supports multiple languages with quality embeddings
+ - 💾 **Local Storage** - All data stored locally in `~/.mcp-documentation-server/` directory
+ - ⚡ **Fast Setup** - No database required, works out of the box
 
 ## Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `add_document` | Add a document with title, content, and metadata |
-| `search_documents` | Search for chunks within a specific document |
-| `list_documents` | List all documents with their metadata |
-| `get_document` | Retrieve a complete document by ID |
-| `delete_document` | Delete a document by ID (removes all associated chunks) |
-| `get_uploads_path` | Get path to uploads folder |
-| `list_uploads_files` | List files in uploads folder |
-| `process_uploads` | Process uploaded files into documents |
+| Tool                | Description                                                                 |
+|---------------------|-----------------------------------------------------------------------------|
+| `add_document`      | Add a document with title, content, and metadata                            |
+| `search_documents`  | Search for chunks within a specific document. Returns a hint for LLMs on how to retrieve more context. |
+| `get_context_window`| Returns a window of chunks around a central chunk for a document            |
+| `list_documents`    | List all documents with their metadata                                      |
+| `get_document`      | Retrieve a complete document by ID                                         |
+| `delete_document`   | Delete a document by ID (removes all associated chunks)                    |
+| `get_uploads_path`  | Get path to uploads folder                                                  |
+| `list_uploads_files`| List files in uploads folder                                                |
+| `process_uploads`   | Process uploaded files into documents                                       |
 
 ## Usage Examples
 
@@ -96,6 +99,20 @@ Add to your MCP client configuration (e.g., Claude Desktop):
     "document_id": "doc-123",
     "query": "variable assignment",
     "limit": 5
+  }
+}
+```
+
+### Retrieving Context Window
+
+```json
+{
+  "tool": "get_context_window",
+  "arguments": {
+    "document_id": "doc-123",
+    "chunk_index": 5,
+    "before": 2,
+    "after": 2
   }
 }
 ```
@@ -138,8 +155,10 @@ All documents and uploads are stored locally in:
 
 Set via `MCP_EMBEDDING_MODEL` environment variable:
 
-- **`Xenova/all-MiniLM-L6-v2`** (default) - Fast, good quality
-- **`Xenova/paraphrase-multilingual-mpnet-base-v2`** (recommended) - Best quality, multilingual
+- **`Xenova/all-MiniLM-L6-v2`** (default) - Fast, good quality (384 dimensions)
+- **`Xenova/paraphrase-multilingual-mpnet-base-v2`** (recommended) - Best quality, multilingual (768 dimensions)
+
+The system automatically manages the correct embedding dimension for each model. Embedding providers expose their dimension via `getDimensions()`.
 
 ⚠️ **Important**: Changing models requires re-adding all documents as embeddings are incompatible.
 
@@ -176,6 +195,7 @@ npm start
 - Use specific, descriptive search queries
 - Combine keywords related to your topic
 - Start with broader queries, then refine with more specific terms
+- After finding relevant chunks with `search_documents`, use `get_context_window` to retrieve additional context around those chunks. You can call `get_context_window` multiple times until you have enough context to answer your question.
 
 ### Performance Tips
 - Process large files during off-peak hours (initial embedding creation)

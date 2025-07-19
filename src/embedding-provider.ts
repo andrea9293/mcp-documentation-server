@@ -2,16 +2,33 @@ import { pipeline } from '@xenova/transformers';
 import { EmbeddingProvider } from './types.js';
 
 /**
+ * Get the embedding dimensions for a specific model
+ */
+function getModelDimensions(modelName: string): number {
+    const modelDimensions: Record<string, number> = {
+        'Xenova/all-MiniLM-L6-v2': 384,
+        'Xenova/paraphrase-multilingual-mpnet-base-v2': 768,
+        // Add new models here as needed
+    };
+    
+    // Default to 384 for unknown models (safer fallback)
+    return modelDimensions[modelName] || 384;
+}
+
+/**
  * Embedding provider using Transformers.js for local embeddings
  */
 export class TransformersEmbeddingProvider implements EmbeddingProvider {
     private pipeline: any = null;
     private isInitialized = false;
     private initPromise: Promise<void> | null = null;
+    private dimensions: number;
 
     constructor(
         private modelName: string = 'Xenova/all-MiniLM-L6-v2'
-    ) { }
+    ) { 
+        this.dimensions = getModelDimensions(modelName);
+    }
 
     private async initialize(): Promise<void> {
         if (this.isInitialized) return;
@@ -97,6 +114,10 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
     getModelName(): string {
         return this.modelName;
     }
+
+    getDimensions(): number {
+        return this.dimensions;
+    }
 }
 
 /**
@@ -104,7 +125,11 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
  * Used as fallback when transformers.js is not available
  */
 export class SimpleEmbeddingProvider implements EmbeddingProvider {
-    private readonly dimension = 768; // Same as paraphrase-multilingual-mpnet-base-v2
+    private readonly dimension: number;
+
+    constructor(dimension: number = 384) { // Default to smaller, safer dimension
+        this.dimension = dimension;
+    }
 
     async generateEmbedding(text: string): Promise<number[]> {
         // Create a simple hash-based embedding
@@ -138,6 +163,10 @@ export class SimpleEmbeddingProvider implements EmbeddingProvider {
 
     getModelName(): string {
         return 'Simple Hash-based Embeddings';
+    }
+
+    getDimensions(): number {
+        return this.dimension;
     }
 }
 
@@ -184,9 +213,12 @@ export async function createEmbeddingProvider(modelName?: string): Promise<Embed
         }
     }
 
-    // Final fallback to simple embeddings
-    console.error('All transformer models failed, falling back to simple embeddings');
-    return new SimpleEmbeddingProvider();
+    // Final fallback to simple embeddings with correct dimensions
+    const lastTriedModel = modelsToTry[modelsToTry.length - 1];
+    const fallbackDimensions = getModelDimensions(lastTriedModel);
+    
+    console.error(`All transformer models failed, falling back to simple embeddings with ${fallbackDimensions} dimensions`);
+    return new SimpleEmbeddingProvider(fallbackDimensions);
 }
 
 /**

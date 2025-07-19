@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 
+import 'dotenv/config';
 import { FastMCP } from "fastmcp";
 import { z } from "zod";
 import { existsSync, mkdirSync } from "fs";
 import { writeFile, readFile } from "fs/promises";
 import * as path from "path";
 import { glob } from "glob";
-import { pipeline } from '@xenova/transformers';
-import { createLazyEmbeddingProvider } from './embedding-provider.js';
+import { createLazyEmbeddingProvider, SimpleEmbeddingProvider } from './embedding-provider.js';
+import { EmbeddingProvider } from './types.js';
+import { IntelligentChunker } from './intelligent-chunker.js';
 import { pdfToText } from 'pdf-ts';
 import { getDefaultDataDir } from './utils.js';
 
@@ -17,9 +19,10 @@ interface DocumentChunk {
     document_id: string;
     chunk_index: number;
     content: string;
-    embeddings: number[];
+    embeddings?: number[];
     start_position: number;
     end_position: number;
+    metadata?: Record<string, any>;
 }
 
 interface Document {
@@ -37,118 +40,21 @@ interface SearchResult {
     score: number;
 }
 
-// Embedding Provider Interface
-interface EmbeddingProvider {
-    generateEmbedding(text: string): Promise<number[]>;
-    isAvailable(): boolean;
-    getModelName(): string;
-}
-
-// Transformers embedding provider using @xenova/transformers
-class TransformersEmbeddingProvider implements EmbeddingProvider {
-    private pipeline: any = null;
-    private isInitialized = false;
-    private initPromise: Promise<void> | null = null;
-
-    constructor(private modelName: string = 'Xenova/all-MiniLM-L6-v2') { }
-
-    private async initialize(): Promise<void> {
-        if (this.isInitialized) return;
-
-        if (this.initPromise) {
-            await this.initPromise;
-            return;
-        }
-
-        this.initPromise = this.doInitialize();
-        await this.initPromise;
-    }
-
-    private async doInitialize(): Promise<void> {
-        try {
-            console.error(`Initializing embedding model: ${this.modelName}`);
-            this.pipeline = await pipeline('feature-extraction', this.modelName);
-            this.isInitialized = true;
-            console.error('Embedding model initialized successfully');
-        } catch (error) {
-            console.error('Failed to initialize embedding model:', error);
-            throw new Error(`Failed to initialize embedding model: ${error}`);
-        }
-    }
-
-    async generateEmbedding(text: string): Promise<number[]> {
-        await this.initialize();
-
-        if (!this.pipeline) {
-            throw new Error('Embedding pipeline not initialized');
-        }
-
-        try {
-            const output = await this.pipeline(text, {
-                pooling: 'mean',
-                normalize: true,
-            });
-
-            return Array.from(output.data as Float32Array);
-        } catch (error) {
-            console.error('Error generating embedding:', error);
-            throw new Error(`Failed to generate embedding: ${error}`);
-        }
-    }
-
-    isAvailable(): boolean {
-        return this.isInitialized && this.pipeline !== null;
-    }
-
-    getModelName(): string {
-        return this.modelName;
-    }
-}
-
-// Simple embedding provider (hash-based fallback)
-class SimpleEmbeddingProvider implements EmbeddingProvider {
-    async generateEmbedding(text: string): Promise<number[]> {
-        // Simple hash-based embedding as fallback
-        const hash = this.simpleHash(text);
-        const embedding = new Array(384).fill(0);
-
-        // Use hash to seed the embedding
-        for (let i = 0; i < 384; i++) {
-            embedding[i] = Math.sin(hash * (i + 1)) * 0.1;
-        }
-
-        return embedding;
-    } private simpleHash(str: string): number {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            const char = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // Convert to 32bit integer
-        }
-        return Math.abs(hash);
-    }
-
-    isAvailable(): boolean {
-        return true;
-    }
-
-    getModelName(): string {
-        return 'Simple Hash-based Embeddings';
-    }
-}
-
 // Document Manager
 class DocumentManager {
     private dataDir: string;
     private uploadsDir: string;
-    private embeddingProvider: EmbeddingProvider;    
-      constructor(embeddingProvider?: EmbeddingProvider) {
+    private embeddingProvider: EmbeddingProvider;
+    private intelligentChunker: IntelligentChunker;
+    
+    constructor(embeddingProvider?: EmbeddingProvider) {
         // Always use default paths
         const baseDir = getDefaultDataDir();
         this.dataDir = path.join(baseDir, 'data');
         this.uploadsDir = path.join(baseDir, 'uploads');
         
         this.embeddingProvider = embeddingProvider || new SimpleEmbeddingProvider();
+        this.intelligentChunker = new IntelligentChunker(this.embeddingProvider);
         this.ensureDataDir();
         this.ensureUploadsDir();
     }
@@ -186,8 +92,13 @@ class DocumentManager {
         const id = this.generateId();
         const now = new Date().toISOString();
 
-        // Create chunks from the content
-        const chunks = await this.createChunks(id, content);
+        // Create chunks using intelligent chunker
+        const chunks = await this.intelligentChunker.createChunks(id, content, {
+            maxSize: 500,
+            overlap: 75,
+            adaptiveSize: true,
+            addContext: true
+        });
 
         const document: Document = {
             id,
@@ -202,66 +113,20 @@ class DocumentManager {
         await writeFile(this.getDocumentPath(id), JSON.stringify(document, null, 2));
         return document;
     }
-    private async createChunks(documentId: string, content: string): Promise<DocumentChunk[]> {
-        const chunkSize = 700; // characters per chunk
-        const chunks: DocumentChunk[] = [];
 
-        // Split content into sentences/paragraphs for better chunking
-        const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 0);
-
-        let currentChunk = "";
-        let chunkIndex = 0;
-        let startPosition = 0;
-
-        for (const sentence of sentences) {
-            const trimmedSentence = sentence.trim();
-            if (!trimmedSentence) continue;
-
-            // If adding this sentence would exceed chunk size, save current chunk
-            if (currentChunk.length + trimmedSentence.length > chunkSize && currentChunk.length > 0) {
-                const embeddings = await this.embeddingProvider.generateEmbedding(currentChunk);
-                const endPosition = startPosition + currentChunk.length;
-
-                chunks.push({
-                    id: `${documentId}_chunk_${chunkIndex}`,
-                    document_id: documentId,
-                    chunk_index: chunkIndex,
-                    content: currentChunk.trim(),
-                    embeddings,
-                    start_position: startPosition,
-                    end_position: endPosition,
-                });
-
-                startPosition = endPosition;
-                currentChunk = trimmedSentence + ".";
-                chunkIndex++;
-            } else {
-                currentChunk += (currentChunk ? " " : "") + trimmedSentence + ".";
-            }
-        }
-
-        // Add the last chunk if it has content
-        if (currentChunk.trim()) {
-            const embeddings = await this.embeddingProvider.generateEmbedding(currentChunk);
-            const endPosition = startPosition + currentChunk.length;
-
-            chunks.push({
-                id: `${documentId}_chunk_${chunkIndex}`,
-                document_id: documentId,
-                chunk_index: chunkIndex,
-                content: currentChunk.trim(),
-                embeddings,
-                start_position: startPosition,
-                end_position: endPosition,
-            });
-        }
-
-        return chunks;
-    }
     async getDocument(id: string): Promise<Document | null> {
         try {
             const data = await readFile(this.getDocumentPath(id), 'utf-8');
             return JSON.parse(data);
+        } catch {
+            return null;
+        }
+    }
+    
+    async getOnlyContentDocument(id: string): Promise<Document | null> {
+        try {
+            const data = await readFile(this.getDocumentPath(id), 'utf-8');
+            return JSON.parse(data).content;
         } catch {
             return null;
         }
@@ -293,9 +158,10 @@ class DocumentManager {
         }
 
         const results: SearchResult[] = document.chunks
+            .filter(chunk => chunk.embeddings && chunk.embeddings.length > 0)
             .map(chunk => ({
                 chunk,
-                score: this.cosineSimilarity(queryEmbedding, chunk.embeddings)
+                score: this.cosineSimilarity(queryEmbedding, chunk.embeddings!)
             }))
             .sort((a, b) => b.score - a.score)
             .slice(0, limit);
@@ -514,7 +380,7 @@ server.addTool({
 // Search documents tool
 server.addTool({
     name: "search_documents",
-    description: "Search for chunks within a specific document using semantic similarity",
+    description: "Search for chunks within a specific document using semantic similarity. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
     parameters: z.object({
         document_id: z.string().describe("The ID of the document to search within"),
         query: z.string().describe("The search query"),
@@ -534,15 +400,19 @@ server.addTool({
             }
 
             const searchResults = results.map(result => ({
-                chunk_id: result.chunk.id,
+                // chunk_id: result.chunk.id,
                 document_id: result.chunk.document_id,
                 chunk_index: result.chunk.chunk_index,
                 score: result.score,
                 content: result.chunk.content,
-                start_position: result.chunk.start_position,
-                end_position: result.chunk.end_position,
+                // start_position: result.chunk.start_position,
+                // end_position: result.chunk.end_position,
             }));
-            return JSON.stringify(searchResults, null, 2);
+            const res = {
+                hint_for_llm: "After identifying the relevant chunks, use the get_context_window tool to retrieve additional context around each chunk of interest. You can call get_context_window multiple times until you have gathered enough context to answer the question.",
+                results: searchResults,
+            }
+            return JSON.stringify(res, null, 2);
         } catch (error) {
             throw new Error(`Search failed: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -552,13 +422,13 @@ server.addTool({
 // Get document tool
 server.addTool({
     name: "get_document",
-    description: "Retrieve a specific document by ID",
+    description: "Retrieve a specific document by ID. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
     parameters: z.object({
         id: z.string().describe("The document ID"),
     }), execute: async (args) => {
         try {
             const manager = await initializeDocumentManager();
-            const document = await manager.getDocument(args.id);
+            const document = await manager.getOnlyContentDocument(args.id);
 
             if (!document) {
                 return `Document with ID ${args.id} not found.`;
@@ -694,6 +564,47 @@ server.addTool({
             throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : String(error)}`);
         }
     },
+});
+
+
+// MCP tool: get_context_window
+server.addTool({
+    name: "get_context_window",
+    description: "Returns a window of chunks around a central chunk given document_id, chunk_index, before, after. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
+    parameters: z.object({
+        document_id: z.string().describe("The document ID"),
+        chunk_index: z.number().describe("The index of the central chunk"),
+        before: z.number().default(1).describe("Number of previous chunks to include"),
+        after: z.number().default(1).describe("Number of next chunks to include")
+    }),
+    async execute({ document_id, chunk_index, before, after }) {
+        const manager = await initializeDocumentManager();
+        const document = await manager.getDocument(document_id);
+        if (!document || !document.chunks || !Array.isArray(document.chunks)) {
+            throw new Error("Document or chunk not found");
+        }
+        const total = document.chunks.length;
+        let windowChunks;
+        let range;
+        
+        const start = Math.max(0, chunk_index - before);
+        const end = Math.min(total, chunk_index + after + 1);
+        windowChunks = document.chunks.slice(start, end).map(chunk => ({
+            chunk_index: chunk.chunk_index,
+            content: chunk.content,
+            // start_position: chunk.start_position,
+            // end_position: chunk.end_position,
+            // type: chunk.metadata?.type || null
+        }));
+        range = [start, end - 1];
+        
+        return JSON.stringify({
+            window: windowChunks,
+            center: chunk_index,
+            // range,
+            total_chunks: total
+        }, null, 2);
+    }
 });
 
 // Add resource for document access
