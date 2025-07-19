@@ -380,7 +380,7 @@ server.addTool({
 // Search documents tool
 server.addTool({
     name: "search_documents",
-    description: "Search for chunks within a specific document using semantic similarity",
+    description: "Search for chunks within a specific document using semantic similarity. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
     parameters: z.object({
         document_id: z.string().describe("The ID of the document to search within"),
         query: z.string().describe("The search query"),
@@ -408,7 +408,11 @@ server.addTool({
                 // start_position: result.chunk.start_position,
                 // end_position: result.chunk.end_position,
             }));
-            return JSON.stringify(searchResults, null, 2);
+            const res = {
+                hint_for_llm: "After identifying the relevant chunks, use the get_context_window tool to retrieve additional context around each chunk of interest. You can call get_context_window multiple times until you have gathered enough context to answer the question.",
+                results: searchResults,
+            }
+            return JSON.stringify(res, null, 2);
         } catch (error) {
             throw new Error(`Search failed: ${error instanceof Error ? error.message : String(error)}`);
         }
