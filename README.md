@@ -245,3 +245,7 @@ MIT - see [LICENSE](LICENSE) file
 ---
 
 **Built with [FastMCP](https://github.com/punkpeye/fastmcp) and TypeScript** 🚀
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=andrea9293/mcp-documentation-server&type=Date)](https://www.star-history.com/#andrea9293/mcp-documentation-server&Date)
