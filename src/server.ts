@@ -562,6 +562,47 @@ server.addTool({
     },
 });
 
+
+// MCP tool: get_context_window
+server.addTool({
+    name: "get_context_window",
+    description: "Returns a window of chunks around a central chunk given document_id, chunk_index, before, after. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
+    parameters: z.object({
+        document_id: z.string().describe("The document ID"),
+        chunk_index: z.number().describe("The index of the central chunk"),
+        before: z.number().default(1).describe("Number of previous chunks to include"),
+        after: z.number().default(1).describe("Number of next chunks to include")
+    }),
+    async execute({ document_id, chunk_index, before, after }) {
+        const manager = await initializeDocumentManager();
+        const document = await manager.getDocument(document_id);
+        if (!document || !document.chunks || !Array.isArray(document.chunks)) {
+            throw new Error("Document or chunk not found");
+        }
+        const total = document.chunks.length;
+        let windowChunks;
+        let range;
+        
+        const start = Math.max(0, chunk_index - before);
+        const end = Math.min(total, chunk_index + after + 1);
+        windowChunks = document.chunks.slice(start, end).map(chunk => ({
+            chunk_index: chunk.chunk_index,
+            content: chunk.content,
+            // start_position: chunk.start_position,
+            // end_position: chunk.end_position,
+            // type: chunk.metadata?.type || null
+        }));
+        range = [start, end - 1];
+        
+        return JSON.stringify({
+            window: windowChunks,
+            center: chunk_index,
+            // range,
+            total_chunks: total
+        }, null, 2);
+    }
+});
+
 // Add resource for document access
 server.addResource({
     name: "Documents Database",
