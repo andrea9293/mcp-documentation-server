@@ -1,5 +1,8 @@
 [![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/72109e6a-27fa-430d-9034-571e7065fe05) [![npm version](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server.svg)](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server)
 
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/andrea.bravaccino)
+
+
 # MCP Documentation Server
 
 A TypeScript-based [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that provides document management and semantic search capabilities. Upload documents, search them with AI embeddings, and integrate seamlessly with MCP clients like Claude Desktop.
