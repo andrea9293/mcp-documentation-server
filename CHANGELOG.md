@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.6.0...v1.7.0) (2025-07-25)
+
+
+### Features
+
+* update all docs e and bugfixing ([c202ee5](https://github.com/andrea9293/mcp-documentation-server/commit/c202ee5124563b8d4eeba0ddde07e3c4efc34358))
+
 # [1.6.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.5.1...v1.6.0) (2025-07-19)
 
 
