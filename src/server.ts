@@ -10,7 +10,7 @@ import { glob } from "glob";
 import { createLazyEmbeddingProvider, SimpleEmbeddingProvider } from './embedding-provider.js';
 import { EmbeddingProvider } from './types.js';
 import { IntelligentChunker } from './intelligent-chunker.js';
-import { pdfToText } from 'pdf-ts';
+import { extractText } from 'unpdf';
 import { getDefaultDataDir } from './utils.js';
 
 // Types
@@ -197,7 +197,12 @@ class DocumentManager {
     private async extractTextFromPdf(filePath: string): Promise<string> {
         try {
             const dataBuffer = await readFile(filePath);
-            const text = await pdfToText(dataBuffer);
+            // Convert Buffer to Uint8Array as required by unpdf
+            const uint8Array = new Uint8Array(dataBuffer);
+            const result = await extractText(uint8Array);
+            
+            // unpdf returns { totalPages: number, text: string[] }
+            const text = result.text.join('\n');
             
             if (!text || text.trim().length === 0) {
                 throw new Error('No text found in PDF or PDF might be image-based');
