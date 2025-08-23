@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.7.0...v1.8.0) (2025-08-23)
+
+
+### Features
+
+* Fix critical PDF vulnerability (CVE-2024-4139) by replacing pdf-ts with unpdf ([f28f93b](https://github.com/andrea9293/mcp-documentation-server/commit/f28f93b4c26d25511055a449ecee241aeddb2a3b))
+
 # [1.7.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.6.0...v1.7.0) (2025-07-25)
 
 
