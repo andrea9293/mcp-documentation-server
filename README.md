@@ -240,7 +240,7 @@ npm run inspect
 ## License
 
 MIT - see [LICENSE](LICENSE) file
-
+ 
 ## Support
 
 - 📖 [Documentation](https://github.com/andrea9293/mcp-documentation-server)
