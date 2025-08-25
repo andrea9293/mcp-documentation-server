@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.9.0...v1.10.0) (2025-08-25)
+
+
+### Features
+
+* add readme to reflect the status of the server ([2f01eba](https://github.com/andrea9293/mcp-documentation-server/commit/2f01eba015546a55bcf8968a8a9bb694982fb2d8))
+
 # [1.9.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.8.0...v1.9.0) (2025-08-25)
 
 
