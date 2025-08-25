@@ -7,25 +7,36 @@
 
 # MCP Documentation Server
 
-A TypeScript-based [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that provides document management and semantic search capabilities. Upload documents, search them with AI embeddings, and integrate seamlessly with MCP clients like Claude Desktop.
+A TypeScript-based [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that provides local-first document management and semantic search using embeddings. The server exposes a collection of MCP tools and is optimized for performance with on-disk persistence, an in-memory index, and caching.
 
 ## Demo Video
 
 [![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/GA28hib-Vj0/0.jpg)](https://www.youtube.com/watch?v=GA28hib-Vj0)
 
 
+
+## Core capabilities
+
+- O(1) Document lookup and keyword index through `DocumentIndex` for fast chunk and document retrieval.
+- LRU `EmbeddingCache` to avoid recomputing embeddings and speed up repeated queries.
+- Parallel chunking and batch processing to accelerate ingestion of large documents.
+- Streaming file reader to process large files without high memory usage.
+- Chunk-based semantic search with context-window retrieval to gather surrounding chunks for better LLM answers.
+- Local-only storage: no external database required. All data resides in `~/.mcp-documentation-server/`.
+
 ## Quick Start
 
-### 1. Install and Run
+### Install and run
+
+Run directly with npx (recommended):
 
 ```bash
-# Run directly with npx (recommended)
 npx @andrea9293/mcp-documentation-server
 ```
 
-### 2. Configure MCP Client
+### Configure an MCP client
 
-Add to your MCP client configuration (e.g., Claude Desktop):
+Example configuration for an MCP client (e.g., Claude Desktop):
 
 ```json
 {
@@ -44,42 +55,73 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 }
 ```
 
-### 3. Start Using
+### Basic workflow
 
-- **Add documents**: Upload text/markdown files or add content directly
-- **Search documents**: Use semantic search to find relevant information
-- **Manage content**: List, retrieve, and organize your documents
+- Add documents using the `add_document` tool or by placing `.txt`, `.md`, or `.pdf` files into the uploads folder and calling `process_uploads`.
+- Search documents with `search_documents` to get ranked chunk hits.
+- Use `get_context_window` to fetch neighboring chunks and provide LLMs with richer context.
 
 ## Features
 
- - 📄 **Document Management** - Add, list, retrieve, and delete documents with metadata
- - 🔍 **Semantic Search** - AI-powered search using embeddings
- - 🧠 **Intelligent Chunking** - Documents are automatically split into context-aware chunks for better search accuracy and context retrieval
- - 🧩 **Context Window Retrieval** - Retrieve a window of chunks around a relevant chunk to get more context for your queries
- - � **LLM Guidance** - The search tool provides hints to LLMs on how to use context windowing for better answers
- - 📁 **File Upload** - Drop .txt/.md/.pdf files in uploads folder for processing
- - 🗑️ **Document Deletion** - Clean removal of documents and their chunks
- - 🌍 **Multilingual** - Supports multiple languages with quality embeddings
- - 💾 **Local Storage** - All data stored locally in `~/.mcp-documentation-server/` directory
- - ⚡ **Fast Setup** - No database required, works out of the box
+- Document management: add, list, retrieve, delete documents and metadata.
+- Semantic search: chunk-level search using embeddings plus an in-memory keyword index.
+- `DocumentIndex`: constant-time lookups for documents and chunks; supports deduplication and persisted index file.
+- `EmbeddingCache`: configurable LRU cache for embedding vectors to reduce recomputation and speed repeated requests.
+- Parallel and batch chunking: ingestion is parallelized for large documents to improve throughput.
+- Streaming file processing: large files are processed in a streaming manner to avoid excessive memory usage.
+- Context window retrieval: fetch N chunks before/after a hit to assemble full context for LLM prompts.
+- Local-first persistence: documents and index are stored as JSON files under the user's data directory.
 
-## Available Tools
+## Exposed MCP tools
 
-| Tool                | Description                                                                 |
-|---------------------|-----------------------------------------------------------------------------|
-| `add_document`      | Add a document with title, content, and metadata                            |
-| `search_documents`  | Search for chunks within a specific document. Returns a hint for LLMs on how to retrieve more context. |
-| `get_context_window`| Returns a window of chunks around a central chunk for a document            |
-| `list_documents`    | List all documents with their metadata                                      |
-| `get_document`      | Retrieve a complete document by ID                                         |
-| `delete_document`   | Delete a document by ID (removes all associated chunks)                    |
-| `get_uploads_path`  | Get path to uploads folder                                                  |
-| `list_uploads_files`| List files in uploads folder                                                |
-| `process_uploads`   | Process uploaded files into documents                                       |
+The server exposes several tools (validated with Zod schemas) for document lifecycle and search:
 
-## Usage Examples
+- `add_document` — Add a document (title, content, metadata)
+- `list_documents` — List stored documents and metadata
+- `get_document` — Retrieve a full document by id
+- `delete_document` — Remove a document and its chunks
+- `process_uploads` — Convert files in uploads folder into documents (chunking + embeddings)
+- `get_uploads_path` — Returns the absolute uploads folder path
+- `list_uploads_files` — Lists files in uploads folder
+- `search_documents` — Semantic search within a document (returns chunk hits and LLM hint)
+- `get_context_window` — Return a window of chunks around a target chunk index
 
-### Adding a Document
+## Configuration & environment variables
+
+Configure behavior via environment variables. Important options:
+
+- `MCP_EMBEDDING_MODEL` — embedding model name (default: `Xenova/all-MiniLM-L6-v2`). Changing the model requires re-adding documents. (all feature extraction xenova models are [here](https://huggingface.co/xenova)).
+- `MCP_INDEXING_ENABLED` — enable/disable the `DocumentIndex` (true/false). Default: `true`.
+- `MCP_CACHE_SIZE` — LRU embedding cache size (integer). Default: `1000`.
+- `MCP_PARALLEL_ENABLED` — enable parallel chunking (true/false). Default: `true`.
+- `MCP_MAX_WORKERS` — number of parallel workers for chunking/indexing. Default: `4`.
+- `MCP_STREAMING_ENABLED` — enable streaming reads for large files. Default: `true`.
+- `MCP_STREAM_CHUNK_SIZE` — streaming buffer size in bytes. Default: `65536` (64KB).
+- `MCP_STREAM_FILE_SIZE_LIMIT` — threshold (bytes) to switch to streaming path. Default: `10485760` (10MB).
+
+Example `.env` (defaults applied when variables are not set):
+
+```env
+MCP_INDEXING_ENABLED=true          # Enable O(1) indexing (default: true)
+MCP_CACHE_SIZE=1000                # LRU cache size (default: 1000)
+MCP_PARALLEL_ENABLED=true          # Enable parallel processing (default: true)
+MCP_MAX_WORKERS=4                  # Parallel worker count (default: 4)
+MCP_STREAMING_ENABLED=true         # Enable streaming (default: true)
+MCP_STREAM_CHUNK_SIZE=65536        # Stream chunk size (default: 64KB)
+MCP_STREAM_FILE_SIZE_LIMIT=10485760 # Streaming threshold (default: 10MB)
+```
+
+Default storage layout (data directory):
+
+```
+~/.mcp-documentation-server/
+├── data/      # Document JSON files
+└── uploads/   # Drop files (.txt, .md, .pdf) to import
+```
+
+## Usage examples
+
+Add a document via MCP tool:
 
 ```json
 {
@@ -95,7 +137,7 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 }
 ```
 
-### Searching Documents
+Search a document:
 
 ```json
 {
@@ -108,7 +150,7 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 }
 ```
 
-### Retrieving Context Window
+Fetch context window:
 
 ```json
 {
@@ -122,39 +164,11 @@ Add to your MCP client configuration (e.g., Claude Desktop):
 }
 ```
 
-### Deleting a Document
+## Performance and operational notes
 
-```json
-{
-  "tool": "delete_document",
-  "arguments": {
-    "id": "doc-123"
-  }
-}
-```
-
-### File Upload Workflow
-
-1. Get uploads path: `get_uploads_path` (`~/.mcp-documentation-server/uploads/`)
-2. Place your .txt/.md/.pdf files in that folder
-3. Process files: `process_uploads`
-4. Search the processed documents
-
-**Supported file types:**
-- **.txt** - Plain text files
-- **.md** - Markdown files  
-- **.pdf** - PDF files (text extraction, no OCR)
-
-## Configuration
-
-### Data Storage
-
-All documents and uploads are stored locally in:
-```
-~/.mcp-documentation-server/
-├── data/      # Document storage (JSON files)
-└── uploads/   # Files to process (.txt, .md, .pdf)
-```
+- Embedding models are downloaded on first use; some models require several hundred MB of downloads.
+- The `DocumentIndex` persists an index file and can be rebuilt if necessary.
+- The `EmbeddingCache` can be warmed by calling `process_uploads`, issuing curated queries, or using a preload API when available.
 
 ### Embedding Models
 
@@ -167,80 +181,38 @@ The system automatically manages the correct embedding dimension for each model.
 
 ⚠️ **Important**: Changing models requires re-adding all documents as embeddings are incompatible.
 
-## Installation Options
-
-### NPX (Recommended)
-```bash
-npx @andrea9293/mcp-documentation-server
-```
-
-### Global Installation
-```bash
-npm install -g @andrea9293/mcp-documentation-server
-mcp-documentation-server
-```
-
-### From Source
-```bash
-git clone https://github.com/andrea9293/mcp-documentation-server.git
-cd mcp-documentation-server
-npm install
-npm run build
-npm start
-```
-
-## Best Practices
-
-### Document Organization
-- Use descriptive titles for easy identification
-- Add relevant metadata (tags, categories) for better organization
-- Keep documents focused on specific topics for better search accuracy
-
-### Search Optimization
-- Use specific, descriptive search queries
-- Combine keywords related to your topic
-- Start with broader queries, then refine with more specific terms
-- After finding relevant chunks with `search_documents`, use `get_context_window` to retrieve additional context around those chunks. You can call `get_context_window` multiple times until you have enough context to answer your question.
-
-### Performance Tips
-- Process large files during off-peak hours (initial embedding creation)
-- Use smaller embedding models for faster performance if quality is acceptable
-- Regularly clean up unused documents to maintain performance
-
-## Troubleshooting
-
-### Timeout on First Use
-- **Cause**: Embedding models download on first use (~420MB for best model)
-- **Solution**: Wait for background download to complete, or use smaller model initially
-
-### Search Results Issues
-- **Cause**: Mixed embedding models in same dataset
-- **Solution**: Stick to one model or re-add all documents after switching
 
 ## Development
 
 ```bash
-# Development server with hot reload
+git clone https://github.com/andrea9293/mcp-documentation-server.git
+```
+```bash
+cd mcp-documentation-server
+```
+
+```bash
 npm run dev
-
-# Build and test
+```
+```bash
 npm run build
-
-# Inspect tools with web UI
+```
+```bash
 npm run inspect
 ```
 
 ## Contributing
 
 1. Fork the repository
-2. Create feature branch: `git checkout -b feature/name`
+2. Create a feature branch: `git checkout -b feature/name`
 3. Follow [Conventional Commits](https://conventionalcommits.org/) for messages
-4. Submit pull request
+4. Open a pull request
 
 ## License
 
 MIT - see [LICENSE](LICENSE) file
  
+
 ## Support
 
 - 📖 [Documentation](https://github.com/andrea9293/mcp-documentation-server)
@@ -249,8 +221,9 @@ MIT - see [LICENSE](LICENSE) file
 
 ---
 
-**Built with [FastMCP](https://github.com/punkpeye/fastmcp) and TypeScript** 🚀
-
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=andrea9293/mcp-documentation-server&type=Date)](https://www.star-history.com/#andrea9293/mcp-documentation-server&Date)
+
+
+**Built with [FastMCP](https://github.com/punkpeye/fastmcp) and TypeScript** 🚀
