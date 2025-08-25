@@ -55,6 +55,7 @@ export interface EmbeddingProvider {
     isAvailable(): boolean;
     getModelName(): string;
     getDimensions(): number;
+    getCacheStats?(): any; // Optional method for cache statistics
 }
 
 export interface DocumentStorage {

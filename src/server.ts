@@ -12,6 +12,7 @@ import { EmbeddingProvider } from './types.js';
 import { IntelligentChunker } from './intelligent-chunker.js';
 import { extractText } from 'unpdf';
 import { getDefaultDataDir } from './utils.js';
+import { DocumentIndex } from './indexing/document-index.js';
 
 // Types
 interface DocumentChunk {
@@ -46,6 +47,10 @@ class DocumentManager {
     private uploadsDir: string;
     private embeddingProvider: EmbeddingProvider;
     private intelligentChunker: IntelligentChunker;
+    private documentIndex: DocumentIndex | null = null;
+    private useIndexing: boolean;
+    private useParallelProcessing: boolean;
+    private useStreaming: boolean;
     
     constructor(embeddingProvider?: EmbeddingProvider) {
         // Always use default paths
@@ -55,8 +60,34 @@ class DocumentManager {
         
         this.embeddingProvider = embeddingProvider || new SimpleEmbeddingProvider();
         this.intelligentChunker = new IntelligentChunker(this.embeddingProvider);
+        
+        // Feature flags with fallback
+        this.useIndexing = process.env.MCP_INDEXING_ENABLED !== 'false';
+        this.useParallelProcessing = process.env.MCP_PARALLEL_ENABLED !== 'false';
+        this.useStreaming = process.env.MCP_STREAMING_ENABLED !== 'false';
+        
         this.ensureDataDir();
         this.ensureUploadsDir();
+        
+        // Initialize indexing with error handling
+        if (this.useIndexing) {
+            try {
+                this.documentIndex = new DocumentIndex(this.dataDir);
+                console.error('[DocumentManager] Indexing enabled');
+            } catch (error) {
+                console.warn('[DocumentManager] Indexing disabled due to error:', error);
+                this.useIndexing = false;
+            }
+        }
+    }
+
+    /**
+     * Initialize the document index (lazy initialization)
+     */
+    private async ensureIndexInitialized(): Promise<void> {
+        if (this.documentIndex && this.useIndexing) {
+            await this.documentIndex.initialize(this.dataDir);
+        }
     }
 
     private ensureDataDir(): void {
@@ -89,6 +120,17 @@ class DocumentManager {
     }
 
     async addDocument(title: string, content: string, metadata: Record<string, any> = {}): Promise<Document> {
+        // Check for duplicate content if indexing is enabled
+        if (this.useIndexing && this.documentIndex) {
+            await this.ensureIndexInitialized();
+            const duplicateId = this.documentIndex.findDuplicateContent(content);
+            if (duplicateId) {
+                console.warn(`[DocumentManager] Duplicate content detected, existing document: ${duplicateId}`);
+                // Optionally, you might want to return the existing document or throw an error
+                // For now, we'll continue with creating a new document
+            }
+        }
+
         const id = this.generateId();
         const now = new Date().toISOString();
 
@@ -110,11 +152,38 @@ class DocumentManager {
             updated_at: now,
         };
 
-        await writeFile(this.getDocumentPath(id), JSON.stringify(document, null, 2));
+        const filePath = this.getDocumentPath(id);
+        await writeFile(filePath, JSON.stringify(document, null, 2));
+
+        // Add to index if enabled
+        if (this.useIndexing && this.documentIndex) {
+            this.documentIndex.addDocument(id, filePath, content, chunks);
+        }
+
         return document;
     }
 
     async getDocument(id: string): Promise<Document | null> {
+        if (this.useIndexing && this.documentIndex) {
+            await this.ensureIndexInitialized();
+            
+            // Use index for O(1) lookup
+            const filePath = this.documentIndex.findDocument(id);
+            if (!filePath) {
+                return null;
+            }
+            
+            try {
+                const data = await readFile(filePath, 'utf-8');
+                return JSON.parse(data);
+            } catch {
+                // File might have been deleted, remove from index
+                this.documentIndex.removeDocument(id);
+                return null;
+            }
+        }
+        
+        // Fallback to original method
         try {
             const data = await readFile(this.getDocumentPath(id), 'utf-8');
             return JSON.parse(data);
@@ -123,15 +192,29 @@ class DocumentManager {
         }
     }
     
-    async getOnlyContentDocument(id: string): Promise<Document | null> {
-        try {
-            const data = await readFile(this.getDocumentPath(id), 'utf-8');
-            return JSON.parse(data).content;
-        } catch {
-            return null;
-        }
+    async getOnlyContentDocument(id: string): Promise<string | null> {
+        const document = await this.getDocument(id);
+        return document ? document.content : null;
     }
     async getAllDocuments(): Promise<Document[]> {
+        if (this.useIndexing && this.documentIndex) {
+            await this.ensureIndexInitialized();
+            
+            // Use index for faster lookup
+            const documentIds = this.documentIndex.getAllDocumentIds();
+            const documents: Document[] = [];
+            
+            for (const id of documentIds) {
+                const document = await this.getDocument(id);
+                if (document) {
+                    documents.push(document);
+                }
+            }
+            
+            return documents;
+        }
+        
+        // Fallback to original method
         // Use forward slashes for glob pattern to work on all platforms
         const globPattern = this.dataDir.replace(/\\/g, '/') + "/*.json";
         const files = await glob(globPattern);
@@ -140,7 +223,10 @@ class DocumentManager {
         for (const file of files) {
             try {
                 const data = await readFile(file, 'utf-8');
-                documents.push(JSON.parse(data));
+                const document = JSON.parse(data);
+                if (document.id) { // Only include valid documents
+                    documents.push(document);
+                }
             } catch {
                 // Skip invalid files
             }
@@ -190,13 +276,24 @@ class DocumentManager {
     }    
     
     /**
-     * Extract text content from a PDF file
+     * Extract text content from a PDF file with streaming support for large files
      * @param filePath Path to the PDF file
      * @returns Extracted text content
      */
     private async extractTextFromPdf(filePath: string): Promise<string> {
         try {
-            const dataBuffer = await readFile(filePath);
+            const stats = await import('fs/promises').then(fs => fs.stat(filePath));
+            const fileSizeLimit = parseInt(process.env.MCP_STREAM_FILE_SIZE_LIMIT || '10485760'); // 10MB
+            
+            let dataBuffer: Buffer;
+            
+            if (this.useStreaming && stats.size > fileSizeLimit) {
+                console.error(`[DocumentManager] Using streaming for large PDF: ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
+                dataBuffer = await this.readFileStreaming(filePath);
+            } else {
+                dataBuffer = await readFile(filePath);
+            }
+            
             // Convert Buffer to Uint8Array as required by unpdf
             const uint8Array = new Uint8Array(dataBuffer);
             const result = await extractText(uint8Array);
@@ -211,6 +308,51 @@ class DocumentManager {
             return text;
         } catch (error) {
             throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Read file using streaming for large files
+     */
+    private async readFileStreaming(filePath: string): Promise<Buffer> {
+        const fs = await import('fs');
+        const chunkSize = parseInt(process.env.MCP_STREAM_CHUNK_SIZE || '65536'); // 64KB chunks
+        
+        return new Promise((resolve, reject) => {
+            const chunks: Buffer[] = [];
+            const readStream = fs.createReadStream(filePath, { highWaterMark: chunkSize });
+            
+            readStream.on('data', (chunk) => {
+                chunks.push(chunk as Buffer);
+            });
+            
+            readStream.on('end', () => {
+                resolve(Buffer.concat(chunks));
+            });
+            
+            readStream.on('error', (error) => {
+                reject(error);
+            });
+        });
+    }
+
+    /**
+     * Read text file with streaming support for large files
+     */
+    private async readTextFile(filePath: string): Promise<string> {
+        try {
+            const stats = await import('fs/promises').then(fs => fs.stat(filePath));
+            const fileSizeLimit = parseInt(process.env.MCP_STREAM_FILE_SIZE_LIMIT || '10485760'); // 10MB
+            
+            if (this.useStreaming && stats.size > fileSizeLimit) {
+                console.error(`[DocumentManager] Using streaming for large text file: ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
+                const buffer = await this.readFileStreaming(filePath);
+                return buffer.toString('utf-8');
+            } else {
+                return await readFile(filePath, 'utf-8');
+            }
+        } catch (error) {
+            throw new Error(`Failed to read text file: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -239,8 +381,8 @@ class DocumentManager {
                     if (fileExtension === '.pdf') {
                         content = await this.extractTextFromPdf(filePath);
                     } else {
-                        // For .txt and .md files
-                        content = await readFile(filePath, 'utf-8');
+                        // For .txt and .md files, use streaming if enabled
+                        content = await this.readTextFile(filePath);
                     }
 
                     if (!content.trim()) {
@@ -327,12 +469,41 @@ class DocumentManager {
             const documentPath = this.getDocumentPath(documentId);
             if (existsSync(documentPath)) {
                 await import('fs/promises').then(fs => fs.unlink(documentPath));
+                
+                // Remove from index if enabled
+                if (this.useIndexing && this.documentIndex) {
+                    this.documentIndex.removeDocument(documentId);
+                }
+                
                 return true;
             }
             return false;
         } catch (error) {
             throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+
+    /**
+     * Get performance and cache statistics
+     */
+    getStats(): any {
+        const stats: any = {
+            features: {
+                indexing: this.useIndexing,
+                parallelProcessing: this.useParallelProcessing,
+                streaming: this.useStreaming
+            }
+        };
+
+        if (this.useIndexing && this.documentIndex) {
+            stats.indexing = this.documentIndex.getStats();
+        }
+
+        if (this.embeddingProvider && typeof this.embeddingProvider.getCacheStats === 'function') {
+            stats.embedding_cache = this.embeddingProvider.getCacheStats();
+        }
+
+        return stats;
     }
 }
 
@@ -610,6 +781,40 @@ server.addTool({
             total_chunks: total
         }, null, 2);
     }
+});
+
+// Performance and Statistics tool
+server.addTool({
+    name: "get_performance_stats",
+    description: "Get performance statistics for indexing, caching, and scalability features",
+    parameters: z.object({}),
+    execute: async () => {
+        try {
+            const manager = await initializeDocumentManager();
+            const stats = manager.getStats();
+            
+            return JSON.stringify({
+                phase_1_scalability: {
+                    indexing: stats.indexing || { enabled: false },
+                    embedding_cache: stats.embedding_cache || { enabled: false },
+                    parallel_processing: { enabled: stats.features.parallelProcessing },
+                    streaming: { enabled: stats.features.streaming }
+                },
+                environment_variables: {
+                    MCP_INDEXING_ENABLED: process.env.MCP_INDEXING_ENABLED || 'true',
+                    MCP_CACHE_SIZE: process.env.MCP_CACHE_SIZE || '1000',
+                    MCP_PARALLEL_ENABLED: process.env.MCP_PARALLEL_ENABLED || 'true',
+                    MCP_MAX_WORKERS: process.env.MCP_MAX_WORKERS || '4',
+                    MCP_STREAMING_ENABLED: process.env.MCP_STREAMING_ENABLED || 'true',
+                    MCP_STREAM_CHUNK_SIZE: process.env.MCP_STREAM_CHUNK_SIZE || '65536',
+                    MCP_STREAM_FILE_SIZE_LIMIT: process.env.MCP_STREAM_FILE_SIZE_LIMIT || '10485760'
+                },
+                description: 'Phase 1 scalability improvements: O(1) indexing, LRU caching, parallel processing, and streaming'
+            }, null, 2);
+        } catch (error) {
+            throw new Error(`Failed to get performance stats: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    },
 });
 
 // Add resource for document access

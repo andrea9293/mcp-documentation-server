@@ -64,37 +64,147 @@ export class IntelligentChunker {
         
         console.error(`[IntelligentChunker] Processing ${contentType} content with ${mergedOptions.maxSize} max size`);
         
+        // Check if parallel processing should be used
+        const useParallel = process.env.MCP_PARALLEL_ENABLED !== 'false' && 
+                           content.length > 10000; // Use parallel for large documents
+        
+        if (useParallel) {
+            try {
+                console.error(`[IntelligentChunker] Using parallel processing for large document (${content.length} chars)`);
+                return await this.createChunksParallel(documentId, content, contentType, mergedOptions);
+            } catch (error) {
+                console.warn('[IntelligentChunker] Parallel processing failed, falling back to sequential:', error);
+                // Fall through to sequential processing
+            }
+        }
+        
+        return await this.createChunksSequential(documentId, content, contentType, mergedOptions);
+    }
+
+    /**
+     * Sequential chunking (original implementation)
+     */
+    private async createChunksSequential(
+        documentId: string, 
+        content: string, 
+        contentType: ContentType,
+        options: ChunkOptions
+    ): Promise<DocumentChunk[]> {
         let chunks: DocumentChunk[];
         
         switch (contentType) {
             case ContentType.CODE:
-                chunks = await this.chunkCode(documentId, content, mergedOptions);
+                chunks = await this.chunkCode(documentId, content, options);
                 break;
             case ContentType.MARKDOWN:
-                chunks = await this.chunkMarkdown(documentId, content, mergedOptions);
+                chunks = await this.chunkMarkdown(documentId, content, options);
                 break;
             case ContentType.HTML:
-                chunks = await this.chunkHtml(documentId, content, mergedOptions);
+                chunks = await this.chunkHtml(documentId, content, options);
                 break;
             case ContentType.MIXED:
-                chunks = await this.chunkMixed(documentId, content, mergedOptions);
+                chunks = await this.chunkMixed(documentId, content, options);
                 break;
             default:
-                chunks = await this.chunkText(documentId, content, mergedOptions);
+                chunks = await this.chunkText(documentId, content, options);
         }
         
         // Apply semantic chunking if enabled
-        if (mergedOptions.adaptiveSize) {
-            chunks = await this.applySemanticRefinement(chunks, mergedOptions);
+        if (options.adaptiveSize) {
+            chunks = await this.applySemanticRefinement(chunks, options);
         }
         
         // Add contextual information if enabled
-        if (mergedOptions.addContext) {
+        if (options.addContext) {
             chunks = await this.enrichWithContext(chunks, content);
         }
         
-        console.error(`[IntelligentChunker] Created ${chunks.length} chunks`);
+        console.error(`[IntelligentChunker] Created ${chunks.length} chunks (sequential)`);
         return chunks;
+    }
+
+    /**
+     * Parallel chunking for improved performance on large documents
+     */
+    private async createChunksParallel(
+        documentId: string, 
+        content: string, 
+        contentType: ContentType,
+        options: ChunkOptions
+    ): Promise<DocumentChunk[]> {
+        const maxWorkers = parseInt(process.env.MCP_MAX_WORKERS || '4');
+        
+        // For parallel processing, we first create basic chunks quickly
+        let initialChunks: DocumentChunk[];
+        
+        // Create initial chunks using appropriate strategy
+        switch (contentType) {
+            case ContentType.CODE:
+                initialChunks = await this.chunkCode(documentId, content, options);
+                break;
+            case ContentType.MARKDOWN:
+                initialChunks = await this.chunkMarkdown(documentId, content, options);
+                break;
+            case ContentType.HTML:
+                initialChunks = await this.chunkHtml(documentId, content, options);
+                break;
+            case ContentType.MIXED:
+                initialChunks = await this.chunkMixed(documentId, content, options);
+                break;
+            default:
+                initialChunks = await this.chunkText(documentId, content, options);
+        }
+
+        // Now process chunks in parallel batches
+        const batchSize = Math.max(1, Math.ceil(initialChunks.length / maxWorkers));
+        const batches: DocumentChunk[][] = [];
+        
+        for (let i = 0; i < initialChunks.length; i += batchSize) {
+            batches.push(initialChunks.slice(i, i + batchSize));
+        }
+
+        console.error(`[IntelligentChunker] Processing ${initialChunks.length} chunks in ${batches.length} parallel batches`);
+
+        // Process batches in parallel
+        const processedBatches = await Promise.all(
+            batches.map(async (batch, batchIndex) => {
+                try {
+                    return await this.processChunkBatch(batch, options, content);
+                } catch (error) {
+                    console.warn(`[IntelligentChunker] Batch ${batchIndex} failed, using original chunks:`, error);
+                    return batch; // Return original chunks if processing fails
+                }
+            })
+        );
+
+        // Flatten results
+        const chunks = processedBatches.flat();
+        
+        console.error(`[IntelligentChunker] Created ${chunks.length} chunks (parallel)`);
+        return chunks;
+    }
+
+    /**
+     * Process a batch of chunks (can be run in parallel)
+     */
+    private async processChunkBatch(
+        chunks: DocumentChunk[], 
+        options: ChunkOptions,
+        originalContent: string
+    ): Promise<DocumentChunk[]> {
+        let processedChunks = chunks;
+
+        // Apply semantic refinement to this batch
+        if (options.adaptiveSize) {
+            processedChunks = await this.applySemanticRefinement(processedChunks, options);
+        }
+
+        // Add contextual information if enabled
+        if (options.addContext) {
+            processedChunks = await this.enrichWithContext(processedChunks, originalContent);
+        }
+
+        return processedChunks;
     }
 
     /**
