@@ -3,7 +3,28 @@
 
 ### Features
 
-* Phase 1 (scalability) - O(1) DocumentIndex, LRU embedding cache, parallel chunking & streaming ([561c1cd](https://github.com/andrea9293/mcp-documentation-server/commit/561c1cdc3f37828d9bb8bd004aadd6051eb60f50)), closes [#7](https://github.com/andrea9293/mcp-documentation-server/issues/7)
+* Phase 1 (scalability) - O(1) DocumentIndex, LRU embedding cache, parallel chunking & streaming, closes [#7](https://github.com/andrea9293/mcp-documentation-server/issues/7)
+
+**Implement Phase 1 scalability improvements:**
+- Adds `DocumentIndex` (O(1) lookup, deduplication, keyword index, persistence).
+- Adds `EmbeddingCache` (LRU) to avoid recomputing embeddings.
+- Updates chunker to support parallel chunking and batch processing.
+- Adds streaming file reader to handle large files without loading entire content into memory.
+- Integrates index/cache into the server and MCP tools (updated: process_uploads, search, get_context_window).
+- Small changes to `embedding-provider` and `types` to leverage the cache.
+- Updates `tsconfig.json` for stricter compilation settings.
+
+Operational notes / migration:
+- To warm the cache immediately: run `process_uploads`.
+- Relevant environment variables:
+  - MCP_INDEXING_ENABLED=true
+  - MCP_CACHE_SIZE=1000
+  - MCP_PARALLEL_ENABLED=true
+  - MCP_MAX_WORKERS=4
+  - MCP_STREAMING_ENABLED=true
+
+
+Refs: PR [#7](https://github.com/andrea9293/mcp-documentation-server/issues/7) (Implement Phase 1 Scalability Improvements)
 
 # [1.8.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.7.0...v1.8.0) (2025-08-23)
 
