@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.8.0...v1.9.0) (2025-08-25)
+
+
+### Features
+
+* Phase 1 (scalability) - O(1) DocumentIndex, LRU embedding cache, parallel chunking & streaming ([561c1cd](https://github.com/andrea9293/mcp-documentation-server/commit/561c1cdc3f37828d9bb8bd004aadd6051eb60f50)), closes [#7](https://github.com/andrea9293/mcp-documentation-server/issues/7)
+
 # [1.8.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.7.0...v1.8.0) (2025-08-23)
 
 
