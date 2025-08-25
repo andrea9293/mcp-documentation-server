@@ -1,5 +1,6 @@
 import { pipeline } from '@xenova/transformers';
 import { EmbeddingProvider } from './types.js';
+import { EmbeddingCache } from './embeddings/embedding-cache.js';
 
 /**
  * Get the embedding dimensions for a specific model
@@ -23,11 +24,21 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
     private isInitialized = false;
     private initPromise: Promise<void> | null = null;
     private dimensions: number;
+    private cache: EmbeddingCache | null = null;
 
     constructor(
         private modelName: string = 'Xenova/all-MiniLM-L6-v2'
     ) { 
         this.dimensions = getModelDimensions(modelName);
+        
+        // Initialize cache if enabled
+        if (process.env.MCP_CACHE_ENABLED !== 'false') {
+            try {
+                this.cache = new EmbeddingCache();
+            } catch (error) {
+                console.warn('[TransformersEmbeddingProvider] Failed to initialize cache:', error);
+            }
+        }
     }
 
     private async initialize(): Promise<void> {
@@ -86,6 +97,14 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
     }
 
     async generateEmbedding(text: string): Promise<number[]> {
+        // Check cache first if available
+        if (this.cache) {
+            const cachedEmbedding = await this.cache.getEmbedding(text);
+            if (cachedEmbedding) {
+                return cachedEmbedding;
+            }
+        }
+
         await this.initialize();
 
         if (!this.pipeline) {
@@ -101,6 +120,12 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
 
             // Convert to regular array
             const embedding = Array.from(output.data as Float32Array);
+            
+            // Cache the result if cache is available
+            if (this.cache) {
+                await this.cache.setEmbedding(text, embedding);
+            }
+            
             return embedding;
         } catch (error) {
             console.error('Error generating embedding:', error);
@@ -117,6 +142,13 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
 
     getDimensions(): number {
         return this.dimensions;
+    }
+
+    /**
+     * Get cache statistics if cache is enabled
+     */
+    getCacheStats(): any {
+        return this.cache ? this.cache.getCacheStats() : null;
     }
 }
 
@@ -167,6 +199,10 @@ export class SimpleEmbeddingProvider implements EmbeddingProvider {
 
     getDimensions(): number {
         return this.dimension;
+    }
+
+    getCacheStats(): any {
+        return { enabled: false, provider: 'SimpleEmbeddingProvider' };
     }
 }
 
