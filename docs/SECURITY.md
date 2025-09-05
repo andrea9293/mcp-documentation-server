@@ -24,7 +24,8 @@ We actively maintain and provide security updates for the following versions of 
 
 ### File Upload Security
 - **Supported formats**: Only `.txt`, `.md`, and `.pdf` files are processed
-- **PDF processing**: Text extraction only, no code execution
+- **PDF processing**: Uses `unpdf` library for safe text extraction without code execution
+- **Security**: PDF processing uses a memory-safe library without known vulnerabilities
 - **Malicious files**: Always validate uploaded content before processing
 - **Path traversal**: The server restricts file access to designated directories only
 
