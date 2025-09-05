@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
-import * as fs from 'fs-extra';
+import fse from 'fs-extra';
+import { promises as fsp } from 'fs';
 import * as path from 'path';
 
 /**
@@ -224,18 +225,18 @@ export class DocumentIndex {
             lastUpdated: new Date().toISOString()
         };
 
-        await fs.writeJSON(this.indexFilePath, indexData, { spaces: 2 });
+    await fse.writeJSON(this.indexFilePath, indexData, { spaces: 2 });
     }
 
     /**
      * Load index from disk
      */
     private async loadIndex(): Promise<void> {
-        if (!await fs.pathExists(this.indexFilePath)) {
+        if (!await fse.pathExists(this.indexFilePath)) {
             throw new Error('Index file does not exist');
         }
 
-        const indexData = await fs.readJSON(this.indexFilePath);
+        const indexData = await fse.readJSON(this.indexFilePath);
         
         this.documentMap = new Map(Object.entries(indexData.documentMap || {}));
         this.chunkMap = new Map(Object.entries(indexData.chunkMap || {}));
@@ -257,13 +258,13 @@ export class DocumentIndex {
         this.keywordIndex.clear();
 
         try {
-            const files = await fs.readdir(dataDir);
+            const files = await fsp.readdir(dataDir);
             const documentFiles = files.filter(file => file.endsWith('.json') && file !== 'document-index.json');
 
             for (const file of documentFiles) {
                 try {
                     const filePath = path.join(dataDir, file);
-                    const document = await fs.readJSON(filePath);
+                    const document = await fse.readJSON(filePath);
                     
                     if (document.id && document.content) {
                         this.addDocument(document.id, filePath, document.content, document.chunks);
