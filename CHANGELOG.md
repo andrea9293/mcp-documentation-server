@@ -1,3 +1,10 @@
+## [1.10.1](https://github.com/andrea9293/mcp-documentation-server/compare/v1.10.0...v1.10.1) (2025-09-05)
+
+
+### Bug Fixes
+
+* **indexing:** avoid fs-extra ESM/CJS interop causing fs.readdir error ([ccd92e1](https://github.com/andrea9293/mcp-documentation-server/commit/ccd92e164b63f6b116a20c5ddd8327844855511f)), closes [#8](https://github.com/andrea9293/mcp-documentation-server/issues/8)
+
 # [1.10.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.9.0...v1.10.0) (2025-08-25)
 
 
