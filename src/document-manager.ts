@@ -2,6 +2,7 @@ import { existsSync, mkdirSync } from "fs";
 import { writeFile, readFile } from "fs/promises";
 import * as path from "path";
 import { glob } from "glob";
+import { createHash } from 'crypto';
 import { Document, DocumentChunk, SearchResult, EmbeddingProvider } from './types.js';
 import { SimpleEmbeddingProvider } from './embedding-provider.js';
 import { IntelligentChunker } from './intelligent-chunker.js';
@@ -101,7 +102,7 @@ export class DocumentManager {
             }
         }
 
-        const id = this.generateId();
+        const id = this.generateId(content);
         const now = new Date().toISOString();
 
         // Create chunks using intelligent chunker
@@ -242,11 +243,12 @@ export class DocumentManager {
         return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
     }
 
-    private generateId(): string {
-        const timestamp = Date.now().toString(36);
-        const random = Math.random().toString(36).substring(2, 8);
-        return `${timestamp}_${random}`;
-    }    
+    private generateId(content: string): string {
+        return createHash('sha256')
+            .update(content)
+            .digest('hex')
+            .substring(0, 16);
+    }   
     
     /**
      * Extract text content from a PDF file with streaming support for large files
