@@ -1,4 +1,4 @@
-import { EmbeddingProvider } from './types.js';
+import { EmbeddingProvider, DocumentChunk } from './types.js';
 
 export interface ChunkOptions {
     maxSize?: number;
@@ -8,17 +8,6 @@ export interface ChunkOptions {
     preserveMarkdown?: boolean;
     adaptiveSize?: boolean;
     addContext?: boolean;
-}
-
-export interface DocumentChunk {
-    id: string;
-    document_id: string;
-    chunk_index: number;
-    content: string;
-    embeddings?: number[];
-    start_position: number;
-    end_position: number;
-    metadata: ChunkMetadata;
 }
 
 export interface ChunkMetadata {
@@ -761,6 +750,9 @@ export class IntelligentChunker {
             // Find the most relevant heading for this chunk
             const relevantHeading = this.findRelevantHeading(chunk, headings);
             if (relevantHeading) {
+                if (!chunk.metadata) {
+                    chunk.metadata = {};
+                }
                 chunk.metadata.heading = relevantHeading;
                 chunk.metadata.section = relevantHeading;
             }
@@ -768,6 +760,9 @@ export class IntelligentChunker {
             // Add surrounding context (simplified)
             const chunkIndex = chunk.chunk_index;
             if (chunkIndex > 0 && chunkIndex < chunks.length - 1) {
+                if (!chunk.metadata) {
+                    chunk.metadata = {};
+                }
                 const prevContent = chunks[chunkIndex - 1].content.substring(0, 100);
                 const nextContent = chunks[chunkIndex + 1].content.substring(0, 100);
                 chunk.metadata.surrounding_context = `Previous: ${prevContent}... Next: ${nextContent}...`;
