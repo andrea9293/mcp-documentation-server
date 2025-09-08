@@ -1,206 +1,233 @@
-import * as fs from 'fs-extra';
-import * as path from 'path';
-import { createHash } from 'crypto';
-import { Document, DocumentMetadata, DocumentStorage, SearchResult, SearchOptions } from './types.js';
+import { existsSync, mkdirSync } from "fs";
+import { writeFile, readFile } from "fs/promises";
+import * as path from "path";
+import { glob } from "glob";
+import { Document, DocumentChunk, SearchResult, EmbeddingProvider } from './types.js';
+import { SimpleEmbeddingProvider } from './embedding-provider.js';
+import { IntelligentChunker } from './intelligent-chunker.js';
+import { extractText } from 'unpdf';
+import { getDefaultDataDir } from './utils.js';
+import { DocumentIndex } from './indexing/document-index.js';
 
 /**
- * File-based document storage with JSON metadata and content files
+ * Document manager that handles document operations with chunking, indexing, and embeddings
  */
-export class FileDocumentStorage implements DocumentStorage {
-    private documentsDir: string;
-    private metadataFile: string;
-    private metadata: Map<string, DocumentMetadata> = new Map();
-
-    constructor(dataDir: string) {
-        this.documentsDir = path.join(dataDir, 'documents');
-        this.metadataFile = path.join(dataDir, 'metadata.json');
-        this.ensureDirectories();
-        this.loadMetadata();
-    }
-
-    private ensureDirectories(): void {
-        fs.ensureDirSync(this.documentsDir);
-    }
-
-    private loadMetadata(): void {
-        try {
-            if (fs.existsSync(this.metadataFile)) {
-                const data = fs.readJsonSync(this.metadataFile);
-                this.metadata = new Map(Object.entries(data).map(([id, meta]: [string, any]) => [
-                    id,
-                    {
-                        ...meta,
-                        createdAt: new Date(meta.createdAt),
-                        updatedAt: new Date(meta.updatedAt),
-                    }
-                ]));
+export class DocumentManager {
+    private dataDir: string;
+    private uploadsDir: string;
+    private embeddingProvider: EmbeddingProvider;
+    private intelligentChunker: IntelligentChunker;
+    private documentIndex: DocumentIndex | null = null;
+    private useIndexing: boolean;
+    private useParallelProcessing: boolean;
+    private useStreaming: boolean;
+    
+    constructor(embeddingProvider?: EmbeddingProvider) {
+        // Always use default paths
+        const baseDir = getDefaultDataDir();
+        this.dataDir = path.join(baseDir, 'data');
+        this.uploadsDir = path.join(baseDir, 'uploads');
+        
+        this.embeddingProvider = embeddingProvider || new SimpleEmbeddingProvider();
+        this.intelligentChunker = new IntelligentChunker(this.embeddingProvider);
+        
+        // Feature flags with fallback
+        this.useIndexing = process.env.MCP_INDEXING_ENABLED !== 'false';
+        this.useParallelProcessing = process.env.MCP_PARALLEL_ENABLED !== 'false';
+        this.useStreaming = process.env.MCP_STREAMING_ENABLED !== 'false';
+        
+        this.ensureDataDir();
+        this.ensureUploadsDir();
+        
+        // Initialize indexing with error handling
+        if (this.useIndexing) {
+            try {
+                this.documentIndex = new DocumentIndex(this.dataDir);
+                console.error('[DocumentManager] Indexing enabled');
+            } catch (error) {
+                console.warn('[DocumentManager] Indexing disabled due to error:', error);
+                this.useIndexing = false;
             }
-        } catch (error) {
-            console.error('Failed to load metadata:', error);
-            this.metadata = new Map();
         }
     }
 
-    private saveMetadata(): void {
-        try {
-            const data = Object.fromEntries(this.metadata);
-            fs.writeJsonSync(this.metadataFile, data, { spaces: 2 });
-        } catch (error) {
-            console.error('Failed to save metadata:', error);
-            throw error;
+    /**
+     * Initialize the document index (lazy initialization)
+     */
+    private async ensureIndexInitialized(): Promise<void> {
+        if (this.documentIndex && this.useIndexing) {
+            await this.documentIndex.initialize(this.dataDir);
         }
+    }
+
+    private ensureDataDir(): void {
+        if (!existsSync(this.dataDir)) {
+            mkdirSync(this.dataDir, { recursive: true });
+        }
+    }
+
+    private ensureUploadsDir(): void {
+        if (!existsSync(this.uploadsDir)) {
+            mkdirSync(this.uploadsDir, { recursive: true });
+        }
+    }
+
+    // Getter methods for directory paths
+    getDataDir(): string {
+        return path.resolve(this.dataDir);
+    }
+
+    getUploadsDir(): string {
+        return path.resolve(this.uploadsDir);
+    }
+
+    getUploadsPath(): string {
+        return path.resolve(this.uploadsDir);
     }
 
     private getDocumentPath(id: string): string {
-        return path.join(this.documentsDir, `${id}.json`);
+        return path.join(this.dataDir, `${id}.json`);
     }
 
-    private getEmbeddingPath(id: string): string {
-        return path.join(this.documentsDir, `${id}.embedding.json`);
-    }
-
-    async save(document: Document): Promise<void> {
-        try {
-            // Save content and metadata
-            const documentPath = this.getDocumentPath(document.id);
-            const docData = {
-                ...document,
-                embedding: undefined, // Don't save embedding with content
-            };
-            await fs.writeJson(documentPath, docData, { spaces: 2 });
-
-            // Save embedding separately if it exists
-            if (document.embedding) {
-                const embeddingPath = this.getEmbeddingPath(document.id);
-                await fs.writeJson(embeddingPath, { embedding: document.embedding });
+    async addDocument(title: string, content: string, metadata: Record<string, any> = {}): Promise<Document> {
+        // Check for duplicate content if indexing is enabled
+        if (this.useIndexing && this.documentIndex) {
+            await this.ensureIndexInitialized();
+            const duplicateId = this.documentIndex.findDuplicateContent(content);
+            if (duplicateId) {
+                console.warn(`[DocumentManager] Duplicate content detected, existing document: ${duplicateId}`);
+                // Optionally, you might want to return the existing document or throw an error
+                // For now, we'll continue with creating a new document
             }
-
-            // Update metadata
-            this.metadata.set(document.id, {
-                id: document.id,
-                title: document.title,
-                author: document.author,
-                tags: document.tags,
-                createdAt: document.createdAt,
-                updatedAt: document.updatedAt,
-                size: document.size,
-                contentType: document.contentType,
-                description: document.description,
-            });
-
-            this.saveMetadata();
-        } catch (error) {
-            console.error(`Failed to save document ${document.id}:`, error);
-            throw error;
         }
+
+        const id = this.generateId();
+        const now = new Date().toISOString();
+
+        // Create chunks using intelligent chunker
+        const chunks = await this.intelligentChunker.createChunks(id, content, {
+            maxSize: 500,
+            overlap: 75,
+            adaptiveSize: true,
+            addContext: true
+        });
+
+        const document: Document = {
+            id,
+            title,
+            content,
+            metadata,
+            chunks,
+            created_at: now,
+            updated_at: now,
+        };
+
+        const filePath = this.getDocumentPath(id);
+        await writeFile(filePath, JSON.stringify(document, null, 2));
+
+        // Add to index if enabled
+        if (this.useIndexing && this.documentIndex) {
+            this.documentIndex.addDocument(id, filePath, content, chunks);
+        }
+
+        return document;
     }
 
-    async load(id: string): Promise<Document | null> {
-        try {
-            const documentPath = this.getDocumentPath(id);
-            if (!await fs.pathExists(documentPath)) {
+    async getDocument(id: string): Promise<Document | null> {
+        if (this.useIndexing && this.documentIndex) {
+            await this.ensureIndexInitialized();
+            
+            // Use index for O(1) lookup
+            const filePath = this.documentIndex.findDocument(id);
+            if (!filePath) {
                 return null;
             }
-
-            const document = await fs.readJson(documentPath);
-
-            // Load embedding if it exists
-            const embeddingPath = this.getEmbeddingPath(id);
-            if (await fs.pathExists(embeddingPath)) {
-                const embeddingData = await fs.readJson(embeddingPath);
-                document.embedding = embeddingData.embedding;
+            
+            try {
+                const data = await readFile(filePath, 'utf-8');
+                return JSON.parse(data);
+            } catch {
+                // File might have been deleted, remove from index
+                this.documentIndex.removeDocument(id);
+                return null;
             }
-
-            // Convert date strings back to Date objects
-            document.createdAt = new Date(document.createdAt);
-            document.updatedAt = new Date(document.updatedAt);
-
-            return document;
-        } catch (error) {
-            console.error(`Failed to load document ${id}:`, error);
+        }
+        
+        // Fallback to original method
+        try {
+            const data = await readFile(this.getDocumentPath(id), 'utf-8');
+            return JSON.parse(data);
+        } catch {
             return null;
         }
     }
-
-    async list(): Promise<DocumentMetadata[]> {
-        return Array.from(this.metadata.values());
+    
+    async getOnlyContentDocument(id: string): Promise<string | null> {
+        const document = await this.getDocument(id);
+        return document ? document.content : null;
     }
 
-    async delete(id: string): Promise<boolean> {
-        try {
-            const documentPath = this.getDocumentPath(id);
-            const embeddingPath = this.getEmbeddingPath(id);
-
-            // Remove files
-            await fs.remove(documentPath);
-            if (await fs.pathExists(embeddingPath)) {
-                await fs.remove(embeddingPath);
-            }
-
-            // Remove from metadata
-            this.metadata.delete(id);
-            this.saveMetadata();
-
-            return true;
-        } catch (error) {
-            console.error(`Failed to delete document ${id}:`, error);
-            return false;
-        }
-    }
-
-    async search(queryEmbedding: number[], options: SearchOptions = {}): Promise<SearchResult[]> {
-        const {
-            limit = 10,
-            threshold = 0.0,
-            includeContent = false,
-            filters = {}
-        } = options;
-
-        const results: SearchResult[] = [];
-
-        for (const metadata of this.metadata.values()) {
-            // Apply filters
-            if (filters.tags && filters.tags.length > 0) {
-                if (!metadata.tags || !filters.tags.some(tag => metadata.tags!.includes(tag))) {
-                    continue;
+    async getAllDocuments(): Promise<Document[]> {
+        if (this.useIndexing && this.documentIndex) {
+            await this.ensureIndexInitialized();
+            
+            // Use index for faster lookup
+            const documentIds = this.documentIndex.getAllDocumentIds();
+            const documents: Document[] = [];
+            
+            for (const id of documentIds) {
+                const document = await this.getDocument(id);
+                if (document) {
+                    documents.push(document);
                 }
             }
+            
+            return documents;
+        }
+        
+        // Fallback to original method
+        // Use forward slashes for glob pattern to work on all platforms
+        const globPattern = this.dataDir.replace(/\\/g, '/') + "/*.json";
+        const files = await glob(globPattern);
+        const documents: Document[] = [];
 
-            if (filters.author && metadata.author !== filters.author) {
-                continue;
-            }
-
-            if (filters.contentType && metadata.contentType !== filters.contentType) {
-                continue;
-            }
-
-            // Load document to get embedding
-            const document = await this.load(metadata.id);
-            if (!document || !document.embedding) {
-                continue;
-            }
-
-            // Calculate cosine similarity
-            const similarity = this.cosineSimilarity(queryEmbedding, document.embedding);
-
-            if (similarity >= threshold) {
-                results.push({
-                    document: includeContent ? document : { ...document, content: '' },
-                    score: similarity,
-                    relevance: similarity,
-                });
+        for (const file of files) {
+            try {
+                const data = await readFile(file, 'utf-8');
+                const document = JSON.parse(data);
+                if (document.id) { // Only include valid documents
+                    documents.push(document);
+                }
+            } catch {
+                // Skip invalid files
             }
         }
 
-        // Sort by similarity score and limit results
-        results.sort((a, b) => b.score - a.score);
-        return results.slice(0, limit);
+        return documents;
+    }
+
+    async searchDocuments(documentId: string, query: string, limit = 10): Promise<SearchResult[]> {
+        const queryEmbedding = await this.embeddingProvider.generateEmbedding(query);
+        const document = await this.getDocument(documentId);
+
+        if (!document) {
+            return [];
+        }
+
+        const results: SearchResult[] = document.chunks
+            .filter(chunk => chunk.embeddings && chunk.embeddings.length > 0)
+            .map(chunk => ({
+                chunk,
+                score: this.cosineSimilarity(queryEmbedding, chunk.embeddings!)
+            }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, limit);
+
+        return results;
     }
 
     private cosineSimilarity(a: number[], b: number[]): number {
-        if (a.length !== b.length) {
-            throw new Error('Vectors must have the same length');
-        }
+        if (a.length !== b.length) return 0;
 
         let dotProduct = 0;
         let normA = 0;
@@ -212,82 +239,241 @@ export class FileDocumentStorage implements DocumentStorage {
             normB += b[i] * b[i];
         }
 
-        normA = Math.sqrt(normA);
-        normB = Math.sqrt(normB);
+        return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    }
 
-        if (normA === 0 || normB === 0) {
-            return 0;
+    private generateId(): string {
+        return Math.random().toString(36).substring(2, 11);
+    }    
+    
+    /**
+     * Extract text content from a PDF file with streaming support for large files
+     * @param filePath Path to the PDF file
+     * @returns Extracted text content
+     */
+    private async extractTextFromPdf(filePath: string): Promise<string> {
+        try {
+            const stats = await import('fs/promises').then(fs => fs.stat(filePath));
+            const fileSizeLimit = parseInt(process.env.MCP_STREAM_FILE_SIZE_LIMIT || '10485760'); // 10MB
+            
+            let dataBuffer: Buffer;
+            
+            if (this.useStreaming && stats.size > fileSizeLimit) {
+                console.error(`[DocumentManager] Using streaming for large PDF: ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
+                dataBuffer = await this.readFileStreaming(filePath);
+            } else {
+                dataBuffer = await readFile(filePath);
+            }
+            
+            // Convert Buffer to Uint8Array as required by unpdf
+            const uint8Array = new Uint8Array(dataBuffer);
+            const result = await extractText(uint8Array);
+            
+            // unpdf returns { totalPages: number, text: string[] }
+            const text = result.text.join('\n');
+            
+            if (!text || text.trim().length === 0) {
+                throw new Error('No text found in PDF or PDF might be image-based');
+            }
+            
+            return text;
+        } catch (error) {
+            throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : String(error)}`);
         }
-
-        return dotProduct / (normA * normB);
-    }
-}
-
-/**
- * Document manager that handles document operations and embeddings
- */
-export class DocumentManager {
-    private storage: DocumentStorage;
-
-    constructor(storage: DocumentStorage) {
-        this.storage = storage;
     }
 
-    generateId(content: string): string {
-        return createHash('sha256')
-            .update(content)
-            .digest('hex')
-            .substring(0, 16);
+    /**
+     * Read file using streaming for large files
+     */
+    private async readFileStreaming(filePath: string): Promise<Buffer> {
+        const fs = await import('fs');
+        const chunkSize = parseInt(process.env.MCP_STREAM_CHUNK_SIZE || '65536'); // 64KB chunks
+        
+        return new Promise((resolve, reject) => {
+            const chunks: Buffer[] = [];
+            const readStream = fs.createReadStream(filePath, { highWaterMark: chunkSize });
+            
+            readStream.on('data', (chunk) => {
+                chunks.push(chunk as Buffer);
+            });
+            
+            readStream.on('end', () => {
+                resolve(Buffer.concat(chunks));
+            });
+            
+            readStream.on('error', (error) => {
+                reject(error);
+            });
+        });
     }
 
-    async addDocument(
-        title: string,
-        content: string,
-        embedding: number[],
-        metadata: {
-            author?: string;
-            tags?: string[];
-            description?: string;
-            contentType?: string;
-        } = {}
-    ): Promise<Document> {
-        const now = new Date();
-        const id = this.generateId(content);
+    /**
+     * Read text file with streaming support for large files
+     */
+    private async readTextFile(filePath: string): Promise<string> {
+        try {
+            const stats = await import('fs/promises').then(fs => fs.stat(filePath));
+            const fileSizeLimit = parseInt(process.env.MCP_STREAM_FILE_SIZE_LIMIT || '10485760'); // 10MB
+            
+            if (this.useStreaming && stats.size > fileSizeLimit) {
+                console.error(`[DocumentManager] Using streaming for large text file: ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
+                const buffer = await this.readFileStreaming(filePath);
+                return buffer.toString('utf-8');
+            } else {
+                return await readFile(filePath, 'utf-8');
+            }
+        } catch (error) {
+            throw new Error(`Failed to read text file: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
 
-        const document: Document = {
-            id,
-            title,
-            content,
-            embedding,
-            author: metadata.author,
-            tags: metadata.tags || [],
-            createdAt: now,
-            updatedAt: now,
-            size: content.length,
-            contentType: metadata.contentType || 'text/plain',
-            description: metadata.description,
+    async processUploadsFolder(): Promise<{ processed: number; errors: string[] }> {
+        const supportedExtensions = ['.txt', '.md', '.pdf'];
+        const errors: string[] = [];
+        let processed = 0;
+
+        try {
+            // Get all supported files from uploads directory
+            const pattern = this.uploadsDir.replace(/\\/g, '/') + "/*{.txt,.md,.pdf}";
+            const files = await glob(pattern);
+
+            for (const filePath of files) {
+                try {
+                    const fileName = path.basename(filePath);
+                    const fileExtension = path.extname(fileName).toLowerCase();
+
+                    if (!supportedExtensions.includes(fileExtension)) {
+                        continue;
+                    }
+
+                    let content: string;
+
+                    // Extract content based on file type
+                    if (fileExtension === '.pdf') {
+                        content = await this.extractTextFromPdf(filePath);
+                    } else {
+                        // For .txt and .md files, use streaming if enabled
+                        content = await this.readTextFile(filePath);
+                    }
+
+                    if (!content.trim()) {
+                        errors.push(`File ${fileName} is empty or contains no extractable text`);
+                        continue;
+                    }
+
+                    // Create document title from filename (without extension)
+                    const title = path.basename(fileName, fileExtension);
+
+                    // Check if document with this filename already exists and remove it
+                    const existingDoc = await this.findDocumentByTitle(title);
+                    if (existingDoc) {
+                        await this.removeDocument(existingDoc.id);
+                    }
+
+                    // Create new document with embeddings
+                    await this.addDocument(title, content, {
+                        source: 'upload',
+                        originalFilename: fileName,
+                        fileExtension: fileExtension,
+                        processedAt: new Date().toISOString()
+                    });
+
+                    processed++;
+                } catch (error) {
+                    errors.push(`Error processing ${path.basename(filePath)}: ${error instanceof Error ? error.message : String(error)}`);
+                }
+            }
+
+            return { processed, errors };
+        } catch (error) {
+            throw new Error(`Failed to process uploads folder: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    private async findDocumentByTitle(title: string): Promise<Document | null> {
+        const documents = await this.getAllDocuments();
+        return documents.find(doc => doc.title === title) || null;
+    }
+
+    private async removeDocument(documentId: string): Promise<void> {
+        try {
+            const documentPath = this.getDocumentPath(documentId);
+            if (existsSync(documentPath)) {
+                await import('fs/promises').then(fs => fs.unlink(documentPath));
+            }
+        } catch (error) {
+            // Ignore errors when removing non-existent files
+        }
+    }
+
+    async listUploadsFiles(): Promise<{ name: string; size: number; modified: string; supported: boolean }[]> {
+        const supportedExtensions = ['.txt', '.md', '.pdf'];
+        const files: { name: string; size: number; modified: string; supported: boolean }[] = [];
+
+        try {
+            const pattern = this.uploadsDir.replace(/\\/g, '/') + "/*";
+            const filePaths = await glob(pattern);
+
+            for (const filePath of filePaths) {
+                const stats = await import('fs/promises').then(fs => fs.stat(filePath));
+                if (stats.isFile()) {
+                    const fileName = path.basename(filePath);
+                    const fileExtension = path.extname(fileName).toLowerCase();
+                    
+                    files.push({
+                        name: fileName,
+                        size: stats.size,
+                        modified: stats.mtime.toISOString(),
+                        supported: supportedExtensions.includes(fileExtension)
+                    });
+                }
+            }
+
+            return files.sort((a, b) => a.name.localeCompare(b.name));
+        } catch (error) {
+            throw new Error(`Failed to list uploads files: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    async deleteDocument(documentId: string): Promise<boolean> {
+        try {
+            const documentPath = this.getDocumentPath(documentId);
+            if (existsSync(documentPath)) {
+                await import('fs/promises').then(fs => fs.unlink(documentPath));
+                
+                // Remove from index if enabled
+                if (this.useIndexing && this.documentIndex) {
+                    this.documentIndex.removeDocument(documentId);
+                }
+                
+                return true;
+            }
+            return false;
+        } catch (error) {
+            throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Get performance and cache statistics
+     */
+    getStats(): any {
+        const stats: any = {
+            features: {
+                indexing: this.useIndexing,
+                parallelProcessing: this.useParallelProcessing,
+                streaming: this.useStreaming
+            }
         };
 
-        await this.storage.save(document);
-        return document;
-    }
+        if (this.useIndexing && this.documentIndex) {
+            stats.indexing = this.documentIndex.getStats();
+        }
 
-    async getDocument(id: string): Promise<Document | null> {
-        return this.storage.load(id);
-    }
+        if (this.embeddingProvider && typeof this.embeddingProvider.getCacheStats === 'function') {
+            stats.embedding_cache = this.embeddingProvider.getCacheStats();
+        }
 
-    async listDocuments(): Promise<DocumentMetadata[]> {
-        return this.storage.list();
-    }
-
-    async deleteDocument(id: string): Promise<boolean> {
-        return this.storage.delete(id);
-    }
-
-    async searchDocuments(
-        queryEmbedding: number[],
-        options?: SearchOptions
-    ): Promise<SearchResult[]> {
-        return this.storage.search(queryEmbedding, options);
+        return stats;
     }
 }

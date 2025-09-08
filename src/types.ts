@@ -1,5 +1,32 @@
 // Types for the MCP Documentation Server
 
+export interface DocumentChunk {
+    id: string;
+    document_id: string;
+    chunk_index: number;
+    content: string;
+    embeddings?: number[];
+    start_position: number;
+    end_position: number;
+    metadata?: Record<string, any>;
+}
+
+export interface Document {
+    id: string;
+    title: string;
+    content: string;
+    metadata: Record<string, any>;
+    chunks: DocumentChunk[];
+    created_at: string;
+    updated_at: string;
+}
+
+export interface SearchResult {
+    chunk: DocumentChunk;
+    score: number;
+}
+
+// Legacy interfaces for backward compatibility
 export interface DocumentMetadata {
     id: string;
     title: string;
@@ -12,13 +39,13 @@ export interface DocumentMetadata {
     description?: string;
 }
 
-export interface Document extends DocumentMetadata {
+export interface LegacyDocument extends DocumentMetadata {
     content: string;
     embedding?: number[];
 }
 
-export interface SearchResult {
-    document: Document;
+export interface LegacySearchResult {
+    document: LegacyDocument;
     score: number;
     relevance: number;
 }

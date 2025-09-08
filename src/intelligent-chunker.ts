@@ -336,7 +336,7 @@ export class IntelligentChunker {
         const language = this.detectProgrammingLanguage(content);
         const separators = this.getLanguageSpecificSeparators(language);
         
-        console.error(`[IntelligentChunker] Chunking ${language} code`);
+        // console.error(`[IntelligentChunker] Chunking ${language} code`);
         
         return this.recursiveChunk(documentId, content, separators, options, {
             type: 'code',
