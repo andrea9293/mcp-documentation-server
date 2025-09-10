@@ -1,4 +1,4 @@
-[![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/72109e6a-27fa-430d-9034-571e7065fe05) [![npm version](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server.svg)](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/andrea9293/mcp-documentation-server)
+[![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/72109e6a-27fa-430d-9034-571e7065fe05) [![npm version](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server.svg)](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/andrea9293/mcp-documentation-server) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 [![Donate with PayPal](https://i.ibb.co/SX4qQBfm/paypal-donate-button171.png)](https://www.paypal.com/donate/?hosted_button_id=HXATGECV8HUJN) 
 
@@ -9,30 +9,37 @@
 
 A TypeScript-based [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that provides local-first document management and semantic search using embeddings. The server exposes a collection of MCP tools and is optimized for performance with on-disk persistence, an in-memory index, and caching.
 
-## Demo Video
+## 🚀 AI-Powered Document Intelligence
 
-[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/GA28hib-Vj0/0.jpg)](https://www.youtube.com/watch?v=GA28hib-Vj0)
+**NEW!** Enhanced with Google Gemini AI for advanced document analysis and contextual understanding. Ask complex questions and get intelligent summaries, explanations, and insights from your documents.
 
+### Key AI Features:
+- **Intelligent Document Analysis**: Gemini AI understands context, relationships, and concepts
+- **Natural Language Queries**: Ask a question, not just keywords
+- **Smart Summarization**: Get comprehensive overviews and explanations
+- **Contextual Insights**: Understand how different parts of your documents relate
+- **File Mapping Cache**: Avoid re-uploading the same files to Gemini for efficiency
 
 
 ## Core capabilities
 
-- O(1) Document lookup and keyword index through `DocumentIndex` for fast chunk and document retrieval.
-- LRU `EmbeddingCache` to avoid recomputing embeddings and speed up repeated queries.
-- Parallel chunking and batch processing to accelerate ingestion of large documents.
-- Streaming file reader to process large files without high memory usage.
-- Chunk-based semantic search with context-window retrieval to gather surrounding chunks for better LLM answers.
-- Local-only storage: no external database required. All data resides in `~/.mcp-documentation-server/`.
+### 🔍 Search & Intelligence
+- **AI-Powered Search** 🤖: Advanced document analysis with Gemini AI for contextual understanding and intelligent insights
+- **Traditional Semantic Search**: Chunk-based search using embeddings plus in-memory keyword index
+- **Context Window Retrieval**: Gather surrounding chunks for richer LLM answers
+
+### ⚡ Performance & Optimization
+- **O(1) Document lookup** and keyword index through `DocumentIndex` for instant retrieval
+- **LRU `EmbeddingCache`** to avoid recomputing embeddings and speed up repeated queries
+- **Parallel chunking** and batch processing to accelerate ingestion of large documents
+- **Streaming file reader** to process large files without high memory usage
+
+### 📁 File Management
+- **Intelligent file handling**: copy-based storage with automatic backup preservation
+- **Complete deletion**: removes both JSON files and associated original files
+- **Local-only storage**: no external database required. All data resides in `~/.mcp-documentation-server/`
 
 ## Quick Start
-
-### Install and run
-
-Run directly with npx (recommended):
-
-```bash
-npx @andrea9293/mcp-documentation-server
-```
 
 ### Configure an MCP client
 
@@ -48,7 +55,8 @@ Example configuration for an MCP client (e.g., Claude Desktop):
         "@andrea9293/mcp-documentation-server"
       ],
       "env": {
-        "MCP_EMBEDDING_MODEL": "Xenova/all-MiniLM-L6-v2"
+            "GEMINI_API_KEY": "your-api-key-here",  // Optional, enables AI-powered search
+            "MCP_EMBEDDING_MODEL": "Xenova/all-MiniLM-L6-v2",
       }
     }
   }
@@ -61,28 +69,23 @@ Example configuration for an MCP client (e.g., Claude Desktop):
 - Search documents with `search_documents` to get ranked chunk hits.
 - Use `get_context_window` to fetch neighboring chunks and provide LLMs with richer context.
 
-## Features
-
-- Document management: add, list, retrieve, delete documents and metadata.
-- Semantic search: chunk-level search using embeddings plus an in-memory keyword index.
-- `DocumentIndex`: constant-time lookups for documents and chunks; supports deduplication and persisted index file.
-- `EmbeddingCache`: configurable LRU cache for embedding vectors to reduce recomputation and speed repeated requests.
-- Parallel and batch chunking: ingestion is parallelized for large documents to improve throughput.
-- Streaming file processing: large files are processed in a streaming manner to avoid excessive memory usage.
-- Context window retrieval: fetch N chunks before/after a hit to assemble full context for LLM prompts.
-- Local-first persistence: documents and index are stored as JSON files under the user's data directory.
-
 ## Exposed MCP tools
 
 The server exposes several tools (validated with Zod schemas) for document lifecycle and search:
 
+### 📄 Document Management
 - `add_document` — Add a document (title, content, metadata)
 - `list_documents` — List stored documents and metadata
 - `get_document` — Retrieve a full document by id
-- `delete_document` — Remove a document and its chunks
-- `process_uploads` — Convert files in uploads folder into documents (chunking + embeddings)
+- `delete_document` — Remove a document, its chunks, and associated original files
+
+### 📁 File Processing
+- `process_uploads` — Convert files in uploads folder into documents (chunking + embeddings + backup preservation)
 - `get_uploads_path` — Returns the absolute uploads folder path
 - `list_uploads_files` — Lists files in uploads folder
+
+### 🔍 Search & Intelligence
+- `search_documents_with_ai` — **🤖 AI-powered search using Gemini** for advanced document analysis (requires `GEMINI_API_KEY`)
 - `search_documents` — Semantic search within a document (returns chunk hits and LLM hint)
 - `get_context_window` — Return a window of chunks around a target chunk index
 
@@ -90,7 +93,8 @@ The server exposes several tools (validated with Zod schemas) for document lifec
 
 Configure behavior via environment variables. Important options:
 
-- `MCP_EMBEDDING_MODEL` — embedding model name (default: `Xenova/all-MiniLM-L6-v2`). Changing the model requires re-adding documents. (all feature extraction xenova models are [here](https://huggingface.co/xenova)).
+- `MCP_EMBEDDING_MODEL` — embedding model name (default: `Xenova/all-MiniLM-L6-v2`). Changing the model requires re-adding documents.
+- `GEMINI_API_KEY` — **Google Gemini API key** for AI-powered search features (optional, enables `search_documents_with_ai`).
 - `MCP_INDEXING_ENABLED` — enable/disable the `DocumentIndex` (true/false). Default: `true`.
 - `MCP_CACHE_SIZE` — LRU embedding cache size (integer). Default: `1000`.
 - `MCP_PARALLEL_ENABLED` — enable parallel chunking (true/false). Default: `true`.
@@ -103,6 +107,7 @@ Example `.env` (defaults applied when variables are not set):
 
 ```env
 MCP_INDEXING_ENABLED=true          # Enable O(1) indexing (default: true)
+GEMINI_API_KEY=your-api-key-here   # Google Gemini API key (optional)
 MCP_CACHE_SIZE=1000                # LRU cache size (default: 1000)
 MCP_PARALLEL_ENABLED=true          # Enable parallel processing (default: true)
 MCP_MAX_WORKERS=4                  # Parallel worker count (default: 4)
@@ -120,6 +125,8 @@ Default storage layout (data directory):
 ```
 
 ## Usage examples
+
+### Basic Document Operations
 
 Add a document via MCP tool:
 
@@ -150,6 +157,46 @@ Search a document:
 }
 ```
 
+### 🤖 AI-Powered Search Examples
+
+**Advanced Analysis** (requires `GEMINI_API_KEY`):
+
+```json
+{
+  "tool": "search_documents_with_ai",
+  "arguments": {
+    "document_id": "doc-123",
+    "query": "explain the main concepts and their relationships"
+  }
+}
+```
+
+**Complex Questions**:
+
+```json
+{
+  "tool": "search_documents_with_ai",
+  "arguments": {
+    "document_id": "doc-123",
+    "query": "what are the key architectural patterns and how do they work together?"
+  }
+}
+```
+
+**Summarization Requests**:
+
+```json
+{
+  "tool": "search_documents_with_ai",
+  "arguments": {
+    "document_id": "doc-123",
+    "query": "summarize the core principles and provide examples"
+  }
+}
+```
+
+### Context Enhancement
+
 Fetch context window:
 
 ```json
@@ -164,7 +211,18 @@ Fetch context window:
 }
 ```
 
-## Performance and operational notes
+### When to Use AI-Powered Search:
+- **Complex Questions**: "How do these concepts relate to each other?"
+- **Summarization**: "Give me an overview of the main principles"
+- **Analysis**: "What are the key patterns and their trade-offs?"
+- **Explanation**: "Explain this topic as if I were new to it"
+- **Comparison**: "Compare these different approaches"
+
+### Performance Benefits:
+- **Smart Caching**: File mapping prevents re-uploading the same content
+- **Efficient Processing**: Only relevant sections are analyzed by Gemini
+- **Contextual Results**: More accurate and comprehensive answers
+- **Natural Interaction**: Ask questions in plain English
 
 - Embedding models are downloaded on first use; some models require several hundred MB of downloads.
 - The `DocumentIndex` persists an index file and can be rebuilt if necessary.

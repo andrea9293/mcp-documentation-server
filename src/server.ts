@@ -5,6 +5,7 @@ import { FastMCP } from "fastmcp";
 import { z } from "zod";
 import { createLazyEmbeddingProvider } from './embedding-provider.js';
 import { DocumentManager } from './document-manager.js';
+import { GeminiSearchService } from './gemini-search-service.js';
 
 // Initialize server
 const server = new FastMCP({
@@ -281,6 +282,65 @@ server.addTool({
         }, null, 2);
     }
 });
+
+// Add Gemini AI search tool (only if GEMINI_API_KEY is available)
+if (process.env.GEMINI_API_KEY) {
+    server.addTool({
+        name: "search_documents_with_ai",
+        description: "Search within a document using Gemini AI for advanced semantic analysis and content extraction.",
+        parameters: z.object({
+            document_id: z.string().describe("The ID of the document to search within"),
+            query: z.string().describe("The search query for semantic analysis"),
+        }),
+        execute: async (args) => {
+            try {
+                const manager = await initializeDocumentManager();
+
+                // Check if document exists
+                const document = await manager.getDocument(args.document_id);
+                if (!document) {
+                    throw new Error(`Document with ID '${args.document_id}' not found. Use 'list_documents' to get available document IDs.`);
+                }
+
+                // Check if original file exists
+                const dataDir = manager.getDataDir();
+                const fs = await import('fs/promises');
+                const files = await fs.readdir(dataDir);
+                const originalFile = files.find(file =>
+                    file.startsWith(args.document_id) && !file.endsWith('.json')
+                );
+
+                if (!originalFile) {
+                    throw new Error(`Original file for document '${args.document_id}' not found. The document may have been processed without keeping the original file.`);
+                }
+
+                console.error(`[GeminiSearch] Starting AI-powered search for document ${args.document_id}`);
+
+                // Perform AI search
+                const result = await GeminiSearchService.searchDocumentWithGemini(
+                    args.document_id,
+                    args.query,
+                    dataDir,
+                    process.env.GEMINI_API_KEY
+                );
+
+                return JSON.stringify({
+                    document_id: args.document_id,
+                    document_title: document.title,
+                    search_query: args.query,
+                    ai_analysis: JSON.parse(result),
+                    note: "This search was performed using Gemini AI for advanced semantic analysis of the original document file. Always verify the results for accuracy."
+                }, null, 2);
+
+            } catch (error) {
+                throw new Error(`AI search failed: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        },
+    });
+    console.error('[Server] Gemini AI search tool enabled (GEMINI_API_KEY found)');
+} else {
+    console.error('[Server] Gemini AI search tool disabled (GEMINI_API_KEY not set)');
+}
 
 // Performance and Statistics tool
 // server.addTool({

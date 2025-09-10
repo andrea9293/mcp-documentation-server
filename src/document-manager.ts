@@ -9,6 +9,7 @@ import { IntelligentChunker } from './intelligent-chunker.js';
 import { extractText } from 'unpdf';
 import { getDefaultDataDir } from './utils.js';
 import { DocumentIndex } from './indexing/document-index.js';
+import { GeminiFileMappingService } from './gemini-file-mapping-service.js';
 
 /**
  * Document manager that handles document operations with chunking, indexing, and embeddings
@@ -39,6 +40,9 @@ export class DocumentManager {
         
         this.ensureDataDir();
         this.ensureUploadsDir();
+        
+        // Initialize Gemini file mapping service
+        GeminiFileMappingService.initialize(this.dataDir);
         
         // Initialize indexing with error handling
         if (this.useIndexing) {
@@ -481,6 +485,9 @@ export class DocumentManager {
             if (this.useIndexing && this.documentIndex) {
                 this.documentIndex.removeDocument(documentId);
             }
+
+            // Remove Gemini file mapping if exists
+            await GeminiFileMappingService.removeMapping(documentId);
 
             return deletedMainFile;
         } catch (error) {
