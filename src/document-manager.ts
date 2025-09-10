@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from "fs";
-import { writeFile, readFile, copyFile } from "fs/promises";
+import { writeFile, readFile, copyFile, readdir, unlink } from "fs/promises";
 import * as path from "path";
 import { glob } from "glob";
 import { createHash } from 'crypto';
@@ -454,17 +454,35 @@ export class DocumentManager {
     async deleteDocument(documentId: string): Promise<boolean> {
         try {
             const documentPath = this.getDocumentPath(documentId);
+            let deletedMainFile = false;
+
+            // Delete main JSON file
             if (existsSync(documentPath)) {
-                await import('fs/promises').then(fs => fs.unlink(documentPath));
-                
-                // Remove from index if enabled
-                if (this.useIndexing && this.documentIndex) {
-                    this.documentIndex.removeDocument(documentId);
-                }
-                
-                return true;
+                await unlink(documentPath);
+                deletedMainFile = true;
+                console.error(`[DocumentManager] Deleted JSON file: ${documentId}.json`);
             }
-            return false;
+
+            // Delete associated original files (any extension except .json)
+            try {
+                const files = await readdir(this.dataDir);
+                for (const file of files) {
+                    if (file.startsWith(documentId) && !file.endsWith('.json')) {
+                        const filePath = path.join(this.dataDir, file);
+                        await unlink(filePath);
+                        console.error(`[DocumentManager] Deleted associated file: ${file}`);
+                    }
+                }
+            } catch (fileError) {
+                console.error(`[DocumentManager] Warning: Could not delete associated files for ${documentId}: ${fileError instanceof Error ? fileError.message : String(fileError)}`);
+            }
+
+            // Remove from index if enabled
+            if (this.useIndexing && this.documentIndex) {
+                this.documentIndex.removeDocument(documentId);
+            }
+
+            return deletedMainFile;
         } catch (error) {
             throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : String(error)}`);
         }
