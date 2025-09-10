@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from "fs";
-import { writeFile, readFile } from "fs/promises";
+import { writeFile, readFile, copyFile } from "fs/promises";
 import * as path from "path";
 import { glob } from "glob";
 import { createHash } from 'crypto';
@@ -375,12 +375,24 @@ export class DocumentManager {
                     }
 
                     // Create new document with embeddings
-                    await this.addDocument(title, content, {
+                    const document = await this.addDocument(title, content, {
                         source: 'upload',
                         originalFilename: fileName,
                         fileExtension: fileExtension,
                         processedAt: new Date().toISOString()
                     });
+
+                    // Copy original file to data directory with same name as JSON file (keep backup in uploads)
+                    const documentId = document.id;
+                    const destinationFileName = `${documentId}${fileExtension}`;
+                    const destinationPath = path.join(this.dataDir, destinationFileName);
+                    
+                    try {
+                        await copyFile(filePath, destinationPath);
+                        console.error(`[DocumentManager] Copied ${fileName} to ${destinationFileName} (keeping backup in uploads)`);
+                    } catch (copyError) {
+                        errors.push(`Warning: Could not copy file ${fileName} to data directory: ${copyError instanceof Error ? copyError.message : String(copyError)}`);
+                    }
 
                     processed++;
                 } catch (error) {
