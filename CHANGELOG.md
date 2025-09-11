@@ -1,3 +1,12 @@
+# [1.11.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.10.1...v1.11.0) (2025-09-11)
+
+
+### Features
+
+* add file backup functionality during document upload ([db31495](https://github.com/andrea9293/mcp-documentation-server/commit/db31495312f82edb2ee01c89ac7e14938df1a7a4))
+* enhance document deletion to remove associated files and improve error handling ([b2fd308](https://github.com/andrea9293/mcp-documentation-server/commit/b2fd3086f3b1db2652adf03fd5d874ee63736bcc))
+* integrate Gemini AI for advanced document search ([34e0960](https://github.com/andrea9293/mcp-documentation-server/commit/34e09600e46eb2061ef69b952bc821ef004b7a9b))
+
 ## [1.10.1](https://github.com/andrea9293/mcp-documentation-server/compare/v1.10.0...v1.10.1) (2025-09-05)
 
 
