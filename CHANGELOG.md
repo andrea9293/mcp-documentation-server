@@ -3,6 +3,24 @@
 
 ### Features
 
+* **AI-Powered Document Intelligence**: Add Google Gemini AI integration for advanced document analysis
+  - New `search_documents_with_ai` tool for natural language queries and intelligent summaries
+  - Smart file mapping prevents re-uploading the same files to Gemini
+  - Requires `GEMINI_API_KEY` environment variable (optional feature)
+
+* **Intelligent File Management**: Enhanced file handling with copy-based storage
+  - Files are now copied to data directory instead of moved, preserving originals in uploads
+  - Complete deletion removes both JSON files and associated original files
+  - Improved data safety and backup preservation
+
+#### ⚠️ Important Notes
+
+* **AI Compatibility**: Gemini AI analysis works only on documents imported with this version or later
+* **File Preservation**: This version copies files from upload folder, ensuring originals remain available for AI analysis.
+* **Migration**: Existing documents without original files in uploads folder cannot use AI features. If you want to use AI features on existing documents, you can re-upload them or copy in data folder renaming with the same name of the respective JSON with embeddings.
+* **Optional Feature**: AI functionality requires `GEMINI_API_KEY` and doesn't affect core operations
+
+
 * add file backup functionality during document upload ([db31495](https://github.com/andrea9293/mcp-documentation-server/commit/db31495312f82edb2ee01c89ac7e14938df1a7a4))
 * enhance document deletion to remove associated files and improve error handling ([b2fd308](https://github.com/andrea9293/mcp-documentation-server/commit/b2fd3086f3b1db2652adf03fd5d874ee63736bcc))
 * integrate Gemini AI for advanced document search ([34e0960](https://github.com/andrea9293/mcp-documentation-server/commit/34e09600e46eb2061ef69b952bc821ef004b7a9b))
