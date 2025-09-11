@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from "fs";
-import { writeFile, readFile } from "fs/promises";
+import { writeFile, readFile, copyFile, readdir, unlink } from "fs/promises";
 import * as path from "path";
 import { glob } from "glob";
 import { createHash } from 'crypto';
@@ -9,6 +9,7 @@ import { IntelligentChunker } from './intelligent-chunker.js';
 import { extractText } from 'unpdf';
 import { getDefaultDataDir } from './utils.js';
 import { DocumentIndex } from './indexing/document-index.js';
+import { GeminiFileMappingService } from './gemini-file-mapping-service.js';
 
 /**
  * Document manager that handles document operations with chunking, indexing, and embeddings
@@ -39,6 +40,9 @@ export class DocumentManager {
         
         this.ensureDataDir();
         this.ensureUploadsDir();
+        
+        // Initialize Gemini file mapping service
+        GeminiFileMappingService.initialize(this.dataDir);
         
         // Initialize indexing with error handling
         if (this.useIndexing) {
@@ -375,12 +379,24 @@ export class DocumentManager {
                     }
 
                     // Create new document with embeddings
-                    await this.addDocument(title, content, {
+                    const document = await this.addDocument(title, content, {
                         source: 'upload',
                         originalFilename: fileName,
                         fileExtension: fileExtension,
                         processedAt: new Date().toISOString()
                     });
+
+                    // Copy original file to data directory with same name as JSON file (keep backup in uploads)
+                    const documentId = document.id;
+                    const destinationFileName = `${documentId}${fileExtension}`;
+                    const destinationPath = path.join(this.dataDir, destinationFileName);
+                    
+                    try {
+                        await copyFile(filePath, destinationPath);
+                        console.error(`[DocumentManager] Copied ${fileName} to ${destinationFileName} (keeping backup in uploads)`);
+                    } catch (copyError) {
+                        errors.push(`Warning: Could not copy file ${fileName} to data directory: ${copyError instanceof Error ? copyError.message : String(copyError)}`);
+                    }
 
                     processed++;
                 } catch (error) {
@@ -442,17 +458,38 @@ export class DocumentManager {
     async deleteDocument(documentId: string): Promise<boolean> {
         try {
             const documentPath = this.getDocumentPath(documentId);
+            let deletedMainFile = false;
+
+            // Delete main JSON file
             if (existsSync(documentPath)) {
-                await import('fs/promises').then(fs => fs.unlink(documentPath));
-                
-                // Remove from index if enabled
-                if (this.useIndexing && this.documentIndex) {
-                    this.documentIndex.removeDocument(documentId);
-                }
-                
-                return true;
+                await unlink(documentPath);
+                deletedMainFile = true;
+                console.error(`[DocumentManager] Deleted JSON file: ${documentId}.json`);
             }
-            return false;
+
+            // Delete associated original files (any extension except .json)
+            try {
+                const files = await readdir(this.dataDir);
+                for (const file of files) {
+                    if (file.startsWith(documentId) && !file.endsWith('.json')) {
+                        const filePath = path.join(this.dataDir, file);
+                        await unlink(filePath);
+                        console.error(`[DocumentManager] Deleted associated file: ${file}`);
+                    }
+                }
+            } catch (fileError) {
+                console.error(`[DocumentManager] Warning: Could not delete associated files for ${documentId}: ${fileError instanceof Error ? fileError.message : String(fileError)}`);
+            }
+
+            // Remove from index if enabled
+            if (this.useIndexing && this.documentIndex) {
+                this.documentIndex.removeDocument(documentId);
+            }
+
+            // Remove Gemini file mapping if exists
+            await GeminiFileMappingService.removeMapping(documentId);
+
+            return deletedMainFile;
         } catch (error) {
             throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : String(error)}`);
         }
