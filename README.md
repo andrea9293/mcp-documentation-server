@@ -11,7 +11,7 @@ A TypeScript-based [Model Context Protocol (MCP)](https://modelcontextprotocol.i
 
 ## 🚀 AI-Powered Document Intelligence
 
-**NEW!** Enhanced with Google Gemini AI for advanced document analysis and contextual understanding. Ask complex questions and get intelligent summaries, explanations, and insights from your documents.
+**NEW!** Enhanced with Google Gemini AI for advanced document analysis and contextual understanding. Ask complex questions and get intelligent summaries, explanations, and insights from your documents. To get API Key go to [Google AI Studio](https://aistudio.google.com/app/apikey)
 
 ### Key AI Features:
 - **Intelligent Document Analysis**: Gemini AI understands context, relationships, and concepts
