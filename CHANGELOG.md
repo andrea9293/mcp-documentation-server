@@ -3,7 +3,7 @@
 
 ### Bug Fixes
 
-* **document-manager:** improve PDF extraction method documentation ([e704267](https://github.com/andrea9293/mcp-documentation-server/commit/e704267536f126aa6d209bac90271a1d14ad5dba))
+* **document-manager:** fix method add_document for creating document with md extension method documentation ([e704267](https://github.com/andrea9293/mcp-documentation-server/commit/e704267536f126aa6d209bac90271a1d14ad5dba))
 * **server:** add_document metadata parameters description adjusted ([52e19e4](https://github.com/andrea9293/mcp-documentation-server/commit/52e19e4930621c3f2e75407ced23f9e1b5757de8))
 
 # [1.11.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.10.1...v1.11.0) (2025-09-11)
