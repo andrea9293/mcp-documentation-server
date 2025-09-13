@@ -94,6 +94,10 @@ export class DocumentManager {
         return path.join(this.dataDir, `${id}.json`);
     }
 
+    private getDocumentMdPath(id: string): string {
+        return path.join(this.dataDir, `${id}.md`);
+    }
+
     async addDocument(title: string, content: string, metadata: Record<string, any> = {}): Promise<Document> {
         // Check for duplicate content if indexing is enabled
         if (this.useIndexing && this.documentIndex) {
@@ -129,6 +133,11 @@ export class DocumentManager {
 
         const filePath = this.getDocumentPath(id);
         await writeFile(filePath, JSON.stringify(document, null, 2));
+
+        // Create markdown file with the document content
+        const mdFilePath = this.getDocumentMdPath(id);
+        const mdContent = `# ${title}\n\n${content}`;
+        await writeFile(mdFilePath, mdContent, 'utf-8');
 
         // Add to index if enabled
         if (this.useIndexing && this.documentIndex) {
@@ -465,6 +474,13 @@ export class DocumentManager {
                 await unlink(documentPath);
                 deletedMainFile = true;
                 console.error(`[DocumentManager] Deleted JSON file: ${documentId}.json`);
+            }
+
+            // Delete associated markdown file
+            const mdPath = this.getDocumentMdPath(documentId);
+            if (existsSync(mdPath)) {
+                await unlink(mdPath);
+                console.error(`[DocumentManager] Deleted markdown file: ${documentId}.md`);
             }
 
             // Delete associated original files (any extension except .json)

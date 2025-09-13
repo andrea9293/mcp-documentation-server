@@ -37,7 +37,7 @@ server.addTool({
     parameters: z.object({
         title: z.string().describe("The title of the document"),
         content: z.string().describe("The content of the document"),
-        metadata: z.record(z.any()).optional().describe("Optional metadata for the document"),
+        metadata: z.object({}).passthrough().optional().describe("Optional metadata for the document"),
     }), execute: async (args) => {
         try {
             const manager = await initializeDocumentManager();
