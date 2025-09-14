@@ -1,118 +1,52 @@
-# MCP Documentation Server - AI Coding Agent Instructions
+## Copilot instructions for contributors and AI coding agents
 
-## Architecture Overview
+Short goal: make focused, safe changes that respect the project's local-first, file-backed architecture and feature flags.
 
-This is a **TypeScript-based Model Context Protocol (MCP) server** providing document management and semantic search capabilities using local AI embeddings. Key architectural patterns:
+What this project is (big picture)
+- TypeScript MCP server that exposes tools for document ingestion, semantic search, and optional AI analysis (Gemini).
+- Data is stored on disk under the default directory (~/.mcp-documentation-server) as JSON documents plus optional original file backups (see `src/document-manager.ts`).
 
-- **FastMCP Framework**: Uses `fastmcp` library for MCP server implementation with Zod schema validation
-- **Modular Design**: Core functionality split across `DocumentManager`, `EmbeddingProvider`, and utility modules
-- **Local-First Storage**: All data stored in `~/.mcp-documentation-server/` (no database required)
-- **Lazy Loading**: Embedding models load on-demand to avoid startup delays
-- **Chunk-Based Search**: Documents split into chunks with embeddings for granular semantic search
+Key components and where to look
+- Server entrypoint: `src/server.ts` — registers MCP tools, uses Zod schemas for parameters, and boots via FastMCP.
+- Document handling: `src/document-manager.ts` — chunking, embedding generation, uploads processing, file copy/backup, and deletion logic.
+- Embeddings: `src/embedding-provider.ts` and `src/embeddings/embedding-cache.ts` — transformers-based provider with a SimpleEmbeddingProvider fallback; caching is optional.
+- Indexing: `src/indexing/document-index.ts` — optional O(1) index used when MCP_INDEXING_ENABLED is true.
+- Chunking: `src/intelligent-chunker.ts` — controls chunk sizes, overlap, adaptive sizing (used by DocumentManager.createChunks).
+- Utilities & types: `src/utils.ts`, `src/types.ts` — canonical types and helpers. Use them for consistency.
 
-## Core Components
+Important conventions and patterns
+- Local-first, file-backed data: prefer read/write to the data directory via `DocumentManager` methods rather than ad-hoc file writes. The DocumentIndex must be updated when documents change.
+- Feature flags via environment variables: many behaviors toggle with env vars (MCP_INDEXING_ENABLED, MCP_PARALLEL_ENABLED, MCP_STREAMING_ENABLED, MCP_CACHE_SIZE, GEMINI_API_KEY). See `src/document-manager.ts` and `src/embedding-provider.ts` for exact names and fallbacks.
+- Embedding models: default is `Xenova/all-MiniLM-L6-v2`. Changing the model requires re-adding documents (embeddings are model-specific). See `src/embedding-provider.ts` for model selection and timeouts.
+- Large files: streaming path exists. Use `MCP_STREAMING_ENABLED` and `MCP_STREAM_FILE_SIZE_LIMIT` to control behavior. `DocumentManager.processUploadsFolder` handles copying originals to the data dir.
+- Error handling: prefer bubbling an Error with a clear message (server tools wrap errors and return informative strings). Tools use Zod schemas for inputs — keep them intact when modifying server tool definitions in `src/server.ts`.
 
-### Server Entry Point (`src/server.ts`)
-- Main FastMCP server with 8 MCP tools (add_document, search_documents, etc.)
-- Uses `#!/usr/bin/env node` shebang - this file becomes the CLI executable
-- Environment configuration via `dotenv` (loads `.env` files)
-- Singleton `DocumentManager` instance with lazy initialization
+Developer workflows & commands (how to run and test)
+- Run in development: `npm run dev` (uses `fastmcp dev src/server.ts`).
+- Run directly without fastmcp: `npm run dev:direct` (npx tsx src/server.ts).
+- Build: `npm run build` (tsc + permission fix via shx) and run packaged `dist` with `npm run dev:build`.
+- Inspect tools: `npm run inspect` (uses fastmcp inspect). These scripts are in `package.json`.
 
-### Document Management (`src/document-manager.ts` logic in `server.ts`)
-- **Chunking Strategy**: Text split into ~500-character chunks with overlap for better search
-- **ID Generation**: Uses timestamp + random suffix pattern (see `generateId()`)
-- **Storage**: JSON files per document in `data/` directory
-- **File Processing**: Supports .txt, .md, .pdf via uploads folder workflow
+Safe change checklist for PRs
+1. Update types in `src/types.ts` when adding or changing tool parameters or Document shape.
+2. Prefer to add helper functions in `src/utils.ts` rather than inline implementations.
+3. Keep file-backed invariants: when creating/deleting documents, ensure `DocumentIndex` (if enabled) is updated and any backup originals in data/ are created/removed via `DocumentManager`.
+4. Respect env toggles—don’t hard-code behavior that bypasses `process.env` flags.
+5. If you touch embeddings, consider performance/timeouts: loading models can be slow (see initialization timeouts in `src/embedding-provider.ts`). Add pre-initialization only when needed.
 
-### Embedding Providers (`src/embedding-provider.ts`)
-- **Primary**: `TransformersEmbeddingProvider` using `@xenova/transformers` (local ML)
-- **Fallback**: `SimpleEmbeddingProvider` (hash-based, no ML dependencies)
-- **Model Selection**: Via `MCP_EMBEDDING_MODEL` env var (default: `Xenova/all-MiniLM-L6-v2`)
-- **Critical**: Model downloads (~420MB) on first use - implement timeouts
+Examples to copy/paste when interacting programmatically
+- Search a document (tool): `search_documents` — parameters: `{ document_id: string, query: string, limit?: number }` (registered in `src/server.ts`).
+- Process uploads: use `process_uploads` tool or put `.txt/.md/.pdf` files into the uploads dir (get path with `get_uploads_path`).
 
-## Development Workflows
+Notes for AI agents editing code
+- Keep changes minimal and localized: prefer adding small, well-tested functions over sweeping refactors.
+- When adding new public tools in `src/server.ts`, use Zod for params and update README examples.
+- Mention the relevant env var in code comments when you rely on one.
+- If you change persisted shapes (Document JSON), add a migration note in README and ensure backward compatibility in `DocumentManager.getDocument`.
 
-### Build & Run Commands
-```bash
-npm run build      # TypeScript compilation + executable permissions (shx chmod)
-npm start          # Direct tsx execution (development)
-npm run dev        # FastMCP dev mode with hot reload
-npm run inspect    # FastMCP web UI for tool testing
-```
+Files to reference when editing or debugging
+- `src/server.ts`, `src/document-manager.ts`, `src/embedding-provider.ts`, `src/indexing/document-index.ts`, `src/intelligent-chunker.ts`, `src/utils.ts`, `src/types.ts`.
 
-### Package Distribution
-- **Binary**: `dist/server.js` becomes CLI executable via `package.json` bin field
-- **NPX Usage**: `npx @andrea9293/mcp-documentation-server` (primary distribution method)
-- **Publishing**: Automated via semantic-release with GitHub Actions
+If anything is unclear or you need operational details (CI, release, or platform-specific testing), ask the maintainer. After editing, run `npm run build` and basic manual smoke tests (start server and call a couple of tools) before opening a PR.
 
-### Development Setup
-```bash
-npm run dev        # Hot reload during development
-npm run inspect    # Visual tool testing interface
-```
-
-## Project-Specific Patterns
-
-### Error Handling Convention
-- Tools return descriptive error messages via `throw new Error()`
-- Embedding failures gracefully fallback to SimpleEmbeddingProvider
-- File operations include existence checks before processing
-
-### Data Directory Structure
-```
-~/.mcp-documentation-server/
-├── data/           # JSON files per document (${id}.json)
-└── uploads/        # User drops files here for processing
-```
-
-### MCP Tool Patterns
-All tools follow this structure:
-```typescript
-server.addTool({
-    name: "tool_name",
-    description: "Tool description",
-    parameters: z.object({...}),  // Zod validation
-    execute: async (args) => {    // Returns string or throws Error
-        const manager = await initializeDocumentManager();
-        // ... implementation
-    }
-});
-```
-
-### Environment Configuration
-- `MCP_EMBEDDING_MODEL`: Embedding model selection (affects all new documents)
-- `dotenv/config` import at top of server.ts enables .env file support
-- Default paths always use `getDefaultDataDir()` from utils.ts
-
-## Integration Points
-
-### FastMCP Integration
-- Server definition: `new FastMCP({ name, version })`
-- Tool registration: `server.addTool()` with Zod schemas
-- Automatic MCP protocol handling (stdio communication)
-
-### Embeddings Pipeline
-- **Async Initialization**: Models load lazily on first embedding request
-- **Timeout Handling**: 5-minute timeout for model downloads
-- **Memory Management**: Single pipeline instance per provider
-
-### File Processing Workflow
-1. User places files in uploads/ (via `get_uploads_path` tool)
-2. `process_uploads` tool discovers .txt/.md/.pdf files
-3. Content extraction (including PDF via `pdf-ts`)
-4. Automatic chunking and embedding generation
-5. Document storage with searchable chunks
-
-## Testing & Debugging
-
-- **Tool Testing**: Use `npm run inspect` for interactive web UI
-- **Log Output**: Embedding initialization logs to stderr (not stdout - preserves MCP protocol)
-- **Error Debugging**: Check document existence before search operations
-- **Performance**: First embedding takes time (model download), subsequent ones are fast
-
-## Critical Implementation Notes
-
-- **Never** output to stdout in the server (breaks MCP protocol) - use stderr for logs
-- **Embedding Model Changes**: Require re-adding all documents (incompatible embeddings)
-- **File Permissions**: Build process sets executable permissions on dist/*.js
-- **TypeScript**: Uses ES modules (`"type": "module"`) with .js imports for compiled output
+— End of Copilot instructions —
