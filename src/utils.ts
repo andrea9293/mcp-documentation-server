@@ -6,7 +6,7 @@ import * as os from 'os';
  */
 export function getDefaultDataDir(): string {
     // Check for MCP_BASE_DIR environment variable first
-    const baseDir = process.env.MCP_BASE_DIR;
+    const baseDir = process.env.MCP_BASE_DIR?.trim();
     if (baseDir) {
         return baseDir;
     }
