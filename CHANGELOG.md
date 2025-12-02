@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.11.2...v1.12.0) (2025-12-02)
+
+
+### Features
+
+* add configurable base directory via MCP_BASE_DIR env var ([eaa5cf8](https://github.com/andrea9293/mcp-documentation-server/commit/eaa5cf84b8937793500daec46dde27dfdab92eda))
+
 ## [1.11.2](https://github.com/andrea9293/mcp-documentation-server/compare/v1.11.1...v1.11.2) (2025-12-02)
 
 
