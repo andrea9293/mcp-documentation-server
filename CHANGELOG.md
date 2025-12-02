@@ -1,3 +1,10 @@
+## [1.11.2](https://github.com/andrea9293/mcp-documentation-server/compare/v1.11.1...v1.11.2) (2025-12-02)
+
+
+### Bug Fixes
+
+* upgrade fastmcp to v3.24.0 ([f4e14ba](https://github.com/andrea9293/mcp-documentation-server/commit/f4e14babdad2a5bb3d44e9eaefb21e419c7b3aa9))
+
 ## [1.11.1](https://github.com/andrea9293/mcp-documentation-server/compare/v1.11.0...v1.11.1) (2025-09-13)
 
 
