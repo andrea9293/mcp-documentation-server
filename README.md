@@ -55,6 +55,7 @@ Example configuration for an MCP client (e.g., Claude Desktop):
         "@andrea9293/mcp-documentation-server"
       ],
       "env": {
+            "MCP_BASE_DIR": "/path/to/workspace",  // Optional, custom data directory (default: ~/.mcp-documentation-server)
             "GEMINI_API_KEY": "your-api-key-here",  // Optional, enables AI-powered search
             "MCP_EMBEDDING_MODEL": "Xenova/all-MiniLM-L6-v2",
       }
@@ -93,6 +94,7 @@ The server exposes several tools (validated with Zod schemas) for document lifec
 
 Configure behavior via environment variables. Important options:
 
+- `MCP_BASE_DIR` — base directory for data storage (default: `~/.mcp-documentation-server`). Set this to use independent workspaces.
 - `MCP_EMBEDDING_MODEL` — embedding model name (default: `Xenova/all-MiniLM-L6-v2`). Changing the model requires re-adding documents.
 - `GEMINI_API_KEY` — **Google Gemini API key** for AI-powered search features (optional, enables `search_documents_with_ai`).
 - `MCP_INDEXING_ENABLED` — enable/disable the `DocumentIndex` (true/false). Default: `true`.
@@ -106,6 +108,7 @@ Configure behavior via environment variables. Important options:
 Example `.env` (defaults applied when variables are not set):
 
 ```env
+MCP_BASE_DIR=/path/to/workspace   # Base directory for data storage (default: ~/.mcp-documentation-server)
 MCP_INDEXING_ENABLED=true          # Enable O(1) indexing (default: true)
 GEMINI_API_KEY=your-api-key-here   # Google Gemini API key (optional)
 MCP_CACHE_SIZE=1000                # LRU cache size (default: 1000)
@@ -119,7 +122,7 @@ MCP_STREAM_FILE_SIZE_LIMIT=10485760 # Streaming threshold (default: 10MB)
 Default storage layout (data directory):
 
 ```
-~/.mcp-documentation-server/
+~/.mcp-documentation-server/  # Or custom path via MCP_BASE_DIR
 ├── data/      # Document JSON files
 └── uploads/   # Drop files (.txt, .md, .pdf) to import
 ```

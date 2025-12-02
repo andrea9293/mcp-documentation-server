@@ -5,6 +5,13 @@ import * as os from 'os';
  * Get the default data directory for the server
  */
 export function getDefaultDataDir(): string {
+    // Check for MCP_BASE_DIR environment variable first
+    const baseDir = process.env.MCP_BASE_DIR?.trim();
+    if (baseDir) {
+        return baseDir;
+    }
+    
+    // Fall back to home directory
     const homeDir = os.homedir();
     return path.join(homeDir, '.mcp-documentation-server');
 }
