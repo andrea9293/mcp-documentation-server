@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Documentation Server</title>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --bg-card: #1a1b26;
+            --bg-input: #24253a;
+            --bg-hover: #292a3e;
+            --border: #2f3146;
+            --text: #c0caf5;
+            --text-muted: #565f89;
+            --text-dim: #737aa2;
+            --accent: #7aa2f7;
+            --accent-hover: #89b4fa;
+            --green: #9ece6a;
+            --red: #f7768e;
+            --orange: #ff9e64;
+            --yellow: #e0af68;
+            --purple: #bb9af7;
+            --cyan: #7dcfff;
+            --radius: 10px;
+            --shadow: 0 4px 24px rgba(0,0,0,.35);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        /* ========= SIDEBAR ========= */
+        .sidebar {
+            width: 260px;
+            min-width: 260px;
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .sidebar-header {
+            padding: 24px 20px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .sidebar-header h1 {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sidebar-header h1 .icon { font-size: 20px; }
+        .sidebar-header p {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+        .nav { padding: 12px 0; flex:1; }
+        .nav-section {
+            padding: 6px 16px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--text-muted);
+        }
+        .nav-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 20px;
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--text-dim);
+            transition: all .15s;
+            border-left: 3px solid transparent;
+        }
+        .nav-item:hover { background: var(--bg-hover); color: var(--text); }
+        .nav-item.active {
+            background: var(--bg-hover);
+            color: var(--accent);
+            border-left-color: var(--accent);
+        }
+        .nav-item .badge {
+            margin-left: auto;
+            background: var(--accent);
+            color: var(--bg);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 7px;
+            border-radius: 10px;
+        }
+        .sidebar-footer {
+            padding: 14px 20px;
+            border-top: 1px solid var(--border);
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* ========= MAIN ========= */
+        .main {
+            flex:1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .topbar {
+            padding: 16px 28px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-card);
+        }
+        .topbar h2 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .content {
+            flex:1;
+            overflow-y: auto;
+            padding: 28px;
+        }
+
+        /* ========= CARDS ========= */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 14px;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ========= BUTTONS ========= */
+        .btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all .15s;
+            font-family: inherit;
+        }
+        .btn-primary { background: var(--accent); color: var(--bg); }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-danger { background: var(--red); color: #fff; }
+        .btn-danger:hover { opacity: .85; }
+        .btn-secondary { background: var(--bg-input); color: var(--text); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: var(--bg-hover); }
+        .btn-success { background: var(--green); color: var(--bg); }
+        .btn-success:hover { opacity: .85; }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+        .btn:disabled { opacity: .5; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        /* ========= INPUTS ========= */
+        input[type="text"], input[type="number"], textarea, select {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 13px;
+            font-family: inherit;
+            transition: border-color .15s;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        textarea { resize: vertical; min-height: 120px; }
+        label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+        }
+        .form-group { margin-bottom: 16px; }
+        .form-row { display: flex; gap: 16px; }
+        .form-row > * { flex:1; }
+
+        /* ========= TABLE ========= */
+        .table-wrap { overflow-x: auto; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th, td {
+            text-align: left;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .8px;
+            color: var(--text-muted);
+            background: var(--bg);
+        }
+        tr:hover td { background: var(--bg-hover); }
+        .id-cell {
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            color: var(--purple);
+        }
+
+        /* ========= SEARCH RESULTS ========= */
+        .result-item {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+            margin-bottom: 10px;
+            background: var(--bg);
+        }
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .result-score {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .score-high { background: rgba(158,206,106,.2); color: var(--green); }
+        .score-med { background: rgba(224,175,104,.2); color: var(--yellow); }
+        .score-low { background: rgba(247,118,142,.2); color: var(--red); }
+        .result-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .result-content {
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        /* ========= STATS ========= */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 18px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: .8px;
+            margin-top: 4px;
+        }
+
+        /* ========= FILE UPLOAD ========= */
+        .dropzone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--accent);
+            background: rgba(122,162,247,.05);
+        }
+        .dropzone-icon { font-size: 36px; margin-bottom: 8px; }
+        .dropzone-text { font-size: 14px; color: var(--text-dim); }
+        .dropzone-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+        /* ========= TOAST ========= */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .toast {
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #fff;
+            animation: toast-in .25s ease-out;
+            max-width: 400px;
+            box-shadow: var(--shadow);
+        }
+        .toast-success { background: #1a3a2a; border: 1px solid var(--green); color: var(--green); }
+        .toast-error { background: #3a1a2a; border: 1px solid var(--red); color: var(--red); }
+        .toast-info { background: #1a2a3a; border: 1px solid var(--accent); color: var(--accent); }
+        @keyframes toast-in { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+
+        /* ========= LOADING ========= */
+        .spinner {
+            display: inline-block;
+            width: 16px; height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin .6s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(15,17,23,.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .loading-overlay.active { display: flex; }
+
+        /* ========= SECTIONS ========= */
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* ========= MODAL ========= */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.6);
+            z-index: 500;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow);
+        }
+        .modal h3 { margin-bottom: 16px; }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+        /* ========= CONTEXT WINDOW ========= */
+        .chunk-nav { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+        .chunk-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: var(--bg-input);
+            color: var(--text-dim);
+        }
+        .chunk-badge.center {
+            background: rgba(122,162,247,.2);
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        /* ========= EMPTY STATE ========= */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state-icon { font-size: 48px; margin-bottom: 12px; }
+        .empty-state-text { font-size: 15px; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        /* ========= DOCUMENT VIEWER ========= */
+        .doc-content-view {
+            font-size: 13px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            max-height: 500px;
+            overflow-y: auto;
+            background: var(--bg);
+            padding: 16px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        /* ========= RESPONSIVE ========= */
+        @media (max-width: 768px) {
+            .sidebar { width: 60px; min-width: 60px; }
+            .sidebar-header h1 span, .sidebar-header p, .nav-section, .nav-item span:not(.nav-icon), .sidebar-footer { display: none; }
+            .nav-item { justify-content: center; padding: 12px; }
+            .nav-item .badge { display: none; }
+            .content { padding: 16px; }
+            .form-row { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+    <div class="sidebar-header">
+        <h1><span class="icon">📚</span> <span>MCP Docs Server</span></h1>
+        <p>Document Management & Search</p>
+    </div>
+    <div class="nav">
+        <div class="nav-section">Overview</div>
+        <div class="nav-item active" data-page="dashboard">
+            <span class="nav-icon">📊</span>
+            <span>Dashboard</span>
+        </div>
+
+        <div class="nav-section">Documents</div>
+        <div class="nav-item" data-page="documents">
+            <span class="nav-icon">📄</span>
+            <span>All Documents</span>
+            <span class="badge" id="doc-count-badge">0</span>
+        </div>
+        <div class="nav-item" data-page="add-document">
+            <span class="nav-icon">➕</span>
+            <span>Add Document</span>
+        </div>
+
+        <div class="nav-section">Search</div>
+        <div class="nav-item" data-page="search-all">
+            <span class="nav-icon">🔍</span>
+            <span>Search All</span>
+        </div>
+        <div class="nav-item" data-page="search-doc">
+            <span class="nav-icon">🎯</span>
+            <span>Search in Doc</span>
+        </div>
+        <div class="nav-item" data-page="search-ai" id="nav-search-ai" style="display:none">
+            <span class="nav-icon">🤖</span>
+            <span>AI Search</span>
+        </div>
+
+        <div class="nav-section">Uploads</div>
+        <div class="nav-item" data-page="uploads">
+            <span class="nav-icon">📁</span>
+            <span>Upload Files</span>
+        </div>
+
+        <div class="nav-section">Tools</div>
+        <div class="nav-item" data-page="context-window">
+            <span class="nav-icon">🪟</span>
+            <span>Context Window</span>
+        </div>
+    </div>
+    <div class="sidebar-footer">
+        MCP Documentation Server v2.0
+    </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+    <div class="topbar">
+        <h2 id="page-title">Dashboard</h2>
+        <div id="topbar-actions"></div>
+    </div>
+    <div class="content">
+
+        <!-- ========== DASHBOARD ========== -->
+        <div class="page active" id="page-dashboard">
+            <div class="stats-row" id="dashboard-stats"></div>
+            <div class="card">
+                <div class="card-title">📊 Recent Documents</div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Title</th><th>ID</th><th>Chunks</th><th>Created</th></tr></thead>
+                        <tbody id="dashboard-recent"></tbody>
+                    </table>
+                </div>
+                <div class="empty-state" id="dashboard-empty" style="display:none">
+                    <div class="empty-state-icon">📭</div>
+                    <div class="empty-state-text">No documents yet. Add your first document!</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== DOCUMENTS LIST ========== -->
+        <div class="page" id="page-documents">
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <div class="card-title" style="margin-bottom:0">📄 All Documents</div>
+                    <button class="btn btn-primary btn-sm" onclick="navigateTo('add-document')">➕ Add New</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Title</th><th>ID</th><th>Chunks</th><th>Created</th><th>Actions</th></tr></thead>
+                        <tbody id="documents-table"></tbody>
+                    </table>
+                </div>
+                <div class="empty-state" id="documents-empty" style="display:none">
+                    <div class="empty-state-icon">📭</div>
+                    <div class="empty-state-text">No documents found</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== ADD DOCUMENT ========== -->
+        <div class="page" id="page-add-document">
+            <div class="card">
+                <div class="card-title">➕ Add New Document</div>
+                <form id="add-doc-form">
+                    <div class="form-group">
+                        <label>Title *</label>
+                        <input type="text" id="add-title" placeholder="Document title" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Content *</label>
+                        <textarea id="add-content" rows="12" placeholder="Paste or type document content here..." required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Metadata (JSON, optional)</label>
+                        <textarea id="add-metadata" rows="3" placeholder='{"author": "John", "tags": ["guide"]}'></textarea>
+                    </div>
+                    <div class="btn-group">
+                        <button type="submit" class="btn btn-primary">💾 Add Document</button>
+                        <button type="reset" class="btn btn-secondary">Clear</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ========== SEARCH ALL ========== -->
+        <div class="page" id="page-search-all">
+            <div class="card">
+                <div class="card-title">🔍 Search Across All Documents</div>
+                <form id="search-all-form">
+                    <div class="form-row">
+                        <div class="form-group" style="flex:3">
+                            <label>Query *</label>
+                            <input type="text" id="sa-query" placeholder="Enter your semantic search query..." required>
+                        </div>
+                        <div class="form-group" style="flex:1">
+                            <label>Limit</label>
+                            <input type="number" id="sa-limit" value="10" min="1" max="100">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">🔍 Search</button>
+                </form>
+            </div>
+            <div id="search-all-results"></div>
+        </div>
+
+        <!-- ========== SEARCH IN DOC ========== -->
+        <div class="page" id="page-search-doc">
+            <div class="card">
+                <div class="card-title">🎯 Search Within Document</div>
+                <form id="search-doc-form">
+                    <div class="form-group">
+                        <label>Document</label>
+                        <select id="sd-docid" required>
+                            <option value="">— Select a document —</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="flex:3">
+                            <label>Query *</label>
+                            <input type="text" id="sd-query" placeholder="Search query..." required>
+                        </div>
+                        <div class="form-group" style="flex:1">
+                            <label>Limit</label>
+                            <input type="number" id="sd-limit" value="10" min="1" max="100">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">🎯 Search</button>
+                </form>
+            </div>
+            <div id="search-doc-results"></div>
+        </div>
+
+        <!-- ========== AI SEARCH ========== -->
+        <div class="page" id="page-search-ai">
+            <div class="card">
+                <div class="card-title">🤖 AI-Powered Search (Gemini)</div>
+                <form id="search-ai-form">
+                    <div class="form-group">
+                        <label>Document</label>
+                        <select id="ai-docid" required>
+                            <option value="">— Select a document —</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Query *</label>
+                        <input type="text" id="ai-query" placeholder="Ask anything about this document..." required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">🤖 AI Search</button>
+                </form>
+            </div>
+            <div id="search-ai-results"></div>
+        </div>
+
+        <!-- ========== UPLOADS ========== -->
+        <div class="page" id="page-uploads">
+            <div class="card">
+                <div class="card-title">📂 Upload Files</div>
+                <div class="dropzone" id="dropzone">
+                    <div class="dropzone-icon">📎</div>
+                    <div class="dropzone-text">Drop files here or click to browse</div>
+                    <div class="dropzone-hint">Supports .txt, .md, .pdf</div>
+                    <input type="file" id="file-input" multiple accept=".txt,.md,.pdf" style="display:none">
+                </div>
+            </div>
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <div class="card-title" style="margin-bottom:0">📁 Files in Uploads Folder</div>
+                    <div class="btn-group">
+                        <button class="btn btn-success btn-sm" onclick="processUploads()">⚡ Process All</button>
+                        <button class="btn btn-secondary btn-sm" onclick="refreshUploads()">🔄 Refresh</button>
+                    </div>
+                </div>
+                <div id="uploads-path" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;"></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Filename</th><th>Size</th><th>Modified</th><th>Status</th></tr></thead>
+                        <tbody id="uploads-table"></tbody>
+                    </table>
+                </div>
+                <div class="empty-state" id="uploads-empty" style="display:none">
+                    <div class="empty-state-icon">📂</div>
+                    <div class="empty-state-text">No files in uploads folder</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== CONTEXT WINDOW ========== -->
+        <div class="page" id="page-context-window">
+            <div class="card">
+                <div class="card-title">🪟 Context Window Explorer</div>
+                <form id="context-form">
+                    <div class="form-group">
+                        <label>Document</label>
+                        <select id="cw-docid" required>
+                            <option value="">— Select a document —</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Chunk Index</label>
+                            <input type="number" id="cw-index" value="0" min="0" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Before</label>
+                            <input type="number" id="cw-before" value="2" min="0" max="20">
+                        </div>
+                        <div class="form-group">
+                            <label>After</label>
+                            <input type="number" id="cw-after" value="2" min="0" max="20">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">🪟 Get Context</button>
+                </form>
+            </div>
+            <div id="context-results"></div>
+        </div>
+
+    </div>
+</div>
+
+<!-- DOCUMENT VIEW MODAL -->
+<div class="modal-overlay" id="doc-modal">
+    <div class="modal" style="max-width:800px;">
+        <h3 id="modal-doc-title">Document</h3>
+        <div style="display:flex;gap:12px;margin-bottom:16px;">
+            <span class="chunk-badge" id="modal-doc-id"></span>
+            <span class="chunk-badge" id="modal-doc-chunks"></span>
+            <span class="chunk-badge" id="modal-doc-date"></span>
+        </div>
+        <div class="doc-content-view" id="modal-doc-content"></div>
+        <div class="modal-actions">
+            <button class="btn btn-danger btn-sm" id="modal-delete-btn">🗑 Delete</button>
+            <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="confirm-modal">
+    <div class="modal" style="max-width:420px;">
+        <h3>⚠️ Confirm Delete</h3>
+        <p id="confirm-text" style="margin:12px 0;color:var(--text-dim);">Are you sure?</p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeConfirm()">Cancel</button>
+            <button class="btn btn-danger" id="confirm-yes-btn">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ============ STATE ============
+let documents = [];
+let config = {};
+
+// ============ API HELPERS ============
+async function api(method, path, body) {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch('/api' + path, opts);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+}
+
+// ============ TOAST ============
+function toast(msg, type = 'info') {
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    el.textContent = msg;
+    document.getElementById('toasts').appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+}
+
+// ============ NAVIGATION ============
+function navigateTo(page) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    const pageEl = document.getElementById('page-' + page);
+    if (pageEl) pageEl.classList.add('active');
+    const navEl = document.querySelector(`.nav-item[data-page="${page}"]`);
+    if (navEl) navEl.classList.add('active');
+
+    const titles = {
+        'dashboard': 'Dashboard',
+        'documents': 'All Documents',
+        'add-document': 'Add Document',
+        'search-all': 'Search All Documents',
+        'search-doc': 'Search Within Document',
+        'search-ai': 'AI Search (Gemini)',
+        'uploads': 'Upload & Process Files',
+        'context-window': 'Context Window Explorer',
+    };
+    document.getElementById('page-title').textContent = titles[page] || page;
+
+    // Refresh data on navigation
+    if (page === 'dashboard') loadDashboard();
+    if (page === 'documents') loadDocuments();
+    if (page === 'uploads') refreshUploads();
+    if (page === 'search-doc' || page === 'search-ai' || page === 'context-window') populateDocSelects();
+}
+
+document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => navigateTo(item.dataset.page));
+});
+
+// ============ FORMAT HELPERS ============
+function fmtDate(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleString();
+}
+function fmtSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
+}
+function escHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+function scoreClass(s) {
+    if (s >= 0.7) return 'score-high';
+    if (s >= 0.4) return 'score-med';
+    return 'score-low';
+}
+
+// ============ DASHBOARD ============
+async function loadDashboard() {
+    try {
+        documents = await api('GET', '/documents');
+        document.getElementById('doc-count-badge').textContent = documents.length;
+
+        const statsEl = document.getElementById('dashboard-stats');
+        const totalChunks = documents.reduce((s, d) => s + (d.chunks_count || 0), 0);
+        statsEl.innerHTML = `
+            <div class="stat-card"><div class="stat-number">${documents.length}</div><div class="stat-label">Documents</div></div>
+            <div class="stat-card"><div class="stat-number">${totalChunks}</div><div class="stat-label">Total Chunks</div></div>
+            <div class="stat-card"><div class="stat-number">${config.embedding_model || '—'}</div><div class="stat-label" style="font-size:10px">Embedding Model</div></div>
+            <div class="stat-card"><div class="stat-number">${config.gemini_available ? '✅' : '❌'}</div><div class="stat-label">Gemini AI</div></div>
+        `;
+
+        const tbody = document.getElementById('dashboard-recent');
+        const empty = document.getElementById('dashboard-empty');
+        if (documents.length === 0) {
+            tbody.innerHTML = '';
+            empty.style.display = '';
+            return;
+        }
+        empty.style.display = 'none';
+        const recent = [...documents].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 10);
+        tbody.innerHTML = recent.map(d => `
+            <tr style="cursor:pointer" onclick="viewDocument('${d.id}')">
+                <td><strong>${escHtml(d.title)}</strong></td>
+                <td class="id-cell">${d.id}</td>
+                <td>${d.chunks_count}</td>
+                <td>${fmtDate(d.created_at)}</td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+// ============ DOCUMENTS ============
+async function loadDocuments() {
+    try {
+        documents = await api('GET', '/documents');
+        document.getElementById('doc-count-badge').textContent = documents.length;
+
+        const tbody = document.getElementById('documents-table');
+        const empty = document.getElementById('documents-empty');
+        if (documents.length === 0) {
+            tbody.innerHTML = '';
+            empty.style.display = '';
+            return;
+        }
+        empty.style.display = 'none';
+        tbody.innerHTML = documents.map(d => `
+            <tr>
+                <td><strong style="cursor:pointer;color:var(--accent)" onclick="viewDocument('${d.id}')">${escHtml(d.title)}</strong></td>
+                <td class="id-cell">${d.id}</td>
+                <td>${d.chunks_count}</td>
+                <td>${fmtDate(d.created_at)}</td>
+                <td>
+                    <div class="btn-group">
+                        <button class="btn btn-secondary btn-sm" onclick="viewDocument('${d.id}')">👁 View</button>
+                        <button class="btn btn-danger btn-sm" onclick="confirmDelete('${d.id}', '${escHtml(d.title).replace(/'/g, "\\'")}')">🗑</button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+// ============ VIEW DOCUMENT MODAL ============
+async function viewDocument(id) {
+    try {
+        const doc = await api('GET', '/documents/' + id);
+        document.getElementById('modal-doc-title').textContent = doc.title;
+        document.getElementById('modal-doc-id').textContent = 'ID: ' + doc.id;
+        document.getElementById('modal-doc-chunks').textContent = 'Chunks: ' + (doc.chunks?.length || 0);
+        document.getElementById('modal-doc-date').textContent = fmtDate(doc.created_at);
+        document.getElementById('modal-doc-content').textContent = doc.content;
+        document.getElementById('modal-delete-btn').onclick = () => {
+            closeModal();
+            confirmDelete(doc.id, doc.title);
+        };
+        document.getElementById('doc-modal').classList.add('active');
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+function closeModal() { document.getElementById('doc-modal').classList.remove('active'); }
+
+// ============ DELETE ============
+let pendingDeleteId = null;
+function confirmDelete(id, title) {
+    pendingDeleteId = id;
+    document.getElementById('confirm-text').textContent = `Delete "${title}" (${id})? This cannot be undone.`;
+    document.getElementById('confirm-modal').classList.add('active');
+}
+function closeConfirm() {
+    pendingDeleteId = null;
+    document.getElementById('confirm-modal').classList.remove('active');
+}
+document.getElementById('confirm-yes-btn').addEventListener('click', async () => {
+    if (!pendingDeleteId) return;
+    try {
+        await api('DELETE', '/documents/' + pendingDeleteId);
+        toast('Document deleted', 'success');
+        closeConfirm();
+        loadDocuments();
+        loadDashboard();
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+});
+
+// ============ ADD DOCUMENT ============
+document.getElementById('add-doc-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = document.getElementById('add-title').value.trim();
+    const content = document.getElementById('add-content').value.trim();
+    const metaStr = document.getElementById('add-metadata').value.trim();
+    let metadata = {};
+    if (metaStr) {
+        try { metadata = JSON.parse(metaStr); } catch { toast('Invalid metadata JSON', 'error'); return; }
+    }
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Adding...';
+    try {
+        const res = await api('POST', '/documents', { title, content, metadata });
+        toast(`Document added: ${res.id}`, 'success');
+        e.target.reset();
+    } catch (err) {
+        toast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '💾 Add Document';
+    }
+});
+
+// ============ SEARCH ALL ============
+document.getElementById('search-all-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const query = document.getElementById('sa-query').value.trim();
+    const limit = parseInt(document.getElementById('sa-limit').value) || 10;
+    const container = document.getElementById('search-all-results');
+    container.innerHTML = '<div style="text-align:center;padding:20px"><span class="spinner"></span> Searching...</div>';
+    try {
+        const results = await api('POST', '/search-all', { query, limit });
+        if (results.length === 0) {
+            container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-text">No results found</div></div>';
+            return;
+        }
+        container.innerHTML = `<div class="card"><div class="card-title">Results (${results.length})</div>` +
+            results.map((r, i) => `
+                <div class="result-item">
+                    <div class="result-header">
+                        <div class="result-meta">📄 <strong>${getDocTitle(r.document_id)}</strong> · Chunk #${r.chunk_index}</div>
+                        <span class="result-score ${scoreClass(r.score)}">${(r.score * 100).toFixed(1)}%</span>
+                    </div>
+                    <div class="result-content">${escHtml(r.content)}</div>
+                    <div style="margin-top:8px">
+                        <button class="btn btn-secondary btn-sm" onclick="loadContext('${r.document_id}', ${r.chunk_index})">🪟 Context</button>
+                    </div>
+                </div>
+            `).join('') + '</div>';
+    } catch (err) {
+        container.innerHTML = '';
+        toast(err.message, 'error');
+    }
+});
+
+// ============ SEARCH DOC ============
+document.getElementById('search-doc-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const document_id = document.getElementById('sd-docid').value;
+    const query = document.getElementById('sd-query').value.trim();
+    const limit = parseInt(document.getElementById('sd-limit').value) || 10;
+    const container = document.getElementById('search-doc-results');
+    container.innerHTML = '<div style="text-align:center;padding:20px"><span class="spinner"></span> Searching...</div>';
+    try {
+        const results = await api('POST', '/search', { document_id, query, limit });
+        if (results.length === 0) {
+            container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-text">No results found</div></div>';
+            return;
+        }
+        container.innerHTML = `<div class="card"><div class="card-title">Results (${results.length})</div>` +
+            results.map(r => `
+                <div class="result-item">
+                    <div class="result-header">
+                        <div class="result-meta">Chunk #${r.chunk_index}</div>
+                        <span class="result-score ${scoreClass(r.score)}">${(r.score * 100).toFixed(1)}%</span>
+                    </div>
+                    <div class="result-content">${escHtml(r.content)}</div>
+                    <div style="margin-top:8px">
+                        <button class="btn btn-secondary btn-sm" onclick="loadContext('${r.document_id}', ${r.chunk_index})">🪟 Context</button>
+                    </div>
+                </div>
+            `).join('') + '</div>';
+    } catch (err) {
+        container.innerHTML = '';
+        toast(err.message, 'error');
+    }
+});
+
+// ============ AI SEARCH ============
+document.getElementById('search-ai-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const document_id = document.getElementById('ai-docid').value;
+    const query = document.getElementById('ai-query').value.trim();
+    const container = document.getElementById('search-ai-results');
+    container.innerHTML = '<div style="text-align:center;padding:20px"><span class="spinner"></span> AI is analyzing the document...</div>';
+    try {
+        const result = await api('POST', '/search-ai', { document_id, query });
+        container.innerHTML = `<div class="card">
+            <div class="card-title">🤖 AI Analysis</div>
+            <div class="result-meta" style="margin-bottom:12px">
+                Document: <strong>${escHtml(result.document_title)}</strong> · Query: <em>${escHtml(result.search_query)}</em>
+            </div>
+            <div class="doc-content-view">${escHtml(JSON.stringify(result.ai_analysis, null, 2))}</div>
+        </div>`;
+    } catch (err) {
+        container.innerHTML = '';
+        toast(err.message, 'error');
+    }
+});
+
+// ============ UPLOADS ============
+async function refreshUploads() {
+    try {
+        const [files, pathInfo] = await Promise.all([
+            api('GET', '/uploads'),
+            api('GET', '/uploads/path')
+        ]);
+        document.getElementById('uploads-path').textContent = '📂 Path: ' + pathInfo.path;
+        const tbody = document.getElementById('uploads-table');
+        const empty = document.getElementById('uploads-empty');
+        if (files.length === 0) {
+            tbody.innerHTML = '';
+            empty.style.display = '';
+            return;
+        }
+        empty.style.display = 'none';
+        tbody.innerHTML = files.map(f => `
+            <tr>
+                <td>${escHtml(f.name)}</td>
+                <td>${fmtSize(f.size)}</td>
+                <td>${fmtDate(f.modified)}</td>
+                <td>${f.supported
+                    ? '<span style="color:var(--green)">✅ Supported</span>'
+                    : '<span style="color:var(--text-muted)">⚠️ Unsupported</span>'
+                }</td>
+            </tr>
+        `).join('');
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+async function processUploads() {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Processing...';
+    try {
+        const result = await api('POST', '/uploads/process');
+        toast(`Processed ${result.processed} files` + (result.errors.length ? ` with ${result.errors.length} errors` : ''), result.errors.length ? 'error' : 'success');
+        if (result.errors.length) {
+            result.errors.forEach(e => toast(e, 'error'));
+        }
+        refreshUploads();
+        loadDashboard();
+    } catch (e) {
+        toast(e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '⚡ Process All';
+    }
+}
+
+// File upload via dropzone
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', async e => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    await uploadFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', async () => {
+    if (fileInput.files.length) await uploadFiles(fileInput.files);
+    fileInput.value = '';
+});
+
+async function uploadFiles(files) {
+    const formData = new FormData();
+    for (const file of files) formData.append('files', file);
+    dropzone.innerHTML = '<div class="spinner"></div><div style="margin-top:8px;color:var(--text-dim)">Uploading...</div>';
+    try {
+        const res = await fetch('/api/uploads/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        toast(`Uploaded ${data.uploaded} file(s)`, 'success');
+        refreshUploads();
+    } catch (e) {
+        toast(e.message, 'error');
+    } finally {
+        dropzone.innerHTML = '<div class="dropzone-icon">📎</div><div class="dropzone-text">Drop files here or click to browse</div><div class="dropzone-hint">Supports .txt, .md, .pdf</div>';
+    }
+}
+
+// ============ CONTEXT WINDOW ============
+document.getElementById('context-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const document_id = document.getElementById('cw-docid').value;
+    const chunk_index = parseInt(document.getElementById('cw-index').value);
+    const before = parseInt(document.getElementById('cw-before').value);
+    const after = parseInt(document.getElementById('cw-after').value);
+    const container = document.getElementById('context-results');
+    container.innerHTML = '<div style="text-align:center;padding:20px"><span class="spinner"></span> Loading...</div>';
+    try {
+        const result = await api('POST', '/context-window', { document_id, chunk_index, before, after });
+        container.innerHTML = `<div class="card">
+            <div class="card-title">Context Window (Total chunks: ${result.total_chunks})</div>
+            <div class="chunk-nav">
+                ${result.window.map(c => `
+                    <span class="chunk-badge ${c.chunk_index === result.center ? 'center' : ''}">#${c.chunk_index}</span>
+                `).join('')}
+            </div>
+            ${result.window.map(c => `
+                <div class="result-item" style="${c.chunk_index === result.center ? 'border-color:var(--accent)' : ''}">
+                    <div class="result-header">
+                        <div class="result-meta">Chunk #${c.chunk_index} ${c.chunk_index === result.center ? '(center)' : ''}</div>
+                    </div>
+                    <div class="result-content">${escHtml(c.content)}</div>
+                </div>
+            `).join('')}
+        </div>`;
+    } catch (err) {
+        container.innerHTML = '';
+        toast(err.message, 'error');
+    }
+});
+
+// Context shortcut from search results
+function loadContext(docId, chunkIdx) {
+    document.getElementById('cw-docid').value = docId;
+    document.getElementById('cw-index').value = chunkIdx;
+    navigateTo('context-window');
+    document.getElementById('context-form').dispatchEvent(new Event('submit'));
+}
+
+// ============ DOCUMENT SELECT POPULATORS ============
+function populateDocSelects() {
+    const selects = ['sd-docid', 'ai-docid', 'cw-docid'];
+    selects.forEach(sid => {
+        const sel = document.getElementById(sid);
+        if (!sel) return;
+        const current = sel.value;
+        sel.innerHTML = '<option value="">— Select a document —</option>';
+        documents.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = `${d.title} (${d.id})`;
+            sel.appendChild(opt);
+        });
+        if (current) sel.value = current;
+    });
+}
+
+function getDocTitle(id) {
+    const doc = documents.find(d => d.id === id);
+    return doc ? doc.title : id;
+}
+
+// ============ CLOSE MODALS ON OVERLAY CLICK ============
+document.getElementById('doc-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal();
+});
+document.getElementById('confirm-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeConfirm();
+});
+
+// ============ KEYBOARD SHORTCUTS ============
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeModal(); closeConfirm(); }
+});
+
+// ============ INIT ============
+async function init() {
+    try {
+        config = await api('GET', '/config');
+        if (config.gemini_available) {
+            document.getElementById('nav-search-ai').style.display = '';
+        }
+    } catch (e) {
+        console.error('Failed to load config', e);
+    }
+    await loadDashboard();
+}
+
+init();
+</script>
+</body>
+</html>

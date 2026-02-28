@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createLazyEmbeddingProvider } from './embedding-provider.js';
 import { DocumentManager } from './document-manager.js';
 import { GeminiSearchService } from './gemini-search-service.js';
+import { startWebServer } from './web-server.js';
 
 // Initialize server
 const server = new FastMCP({
@@ -424,6 +425,15 @@ if (process.env.GEMINI_API_KEY) {
 // });
 
 // Start the server
+// Optionally start web UI alongside MCP server
+if (process.env.START_WEB_UI !== 'false') {
+    startWebServer().then(() => {
+        console.error('[Server] Web UI started (port=' + (process.env.WEB_PORT || '3080') + ')');
+    }).catch(err => {
+        console.error('[Server] Failed to start Web UI:', err instanceof Error ? err.message : String(err));
+    });
+}
+
 server.start({
     transportType: "stdio",
 });
