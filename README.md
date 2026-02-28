@@ -11,6 +11,12 @@ A TypeScript-based [Model Context Protocol (MCP)](https://modelcontextprotocol.i
 
 ## Core capabilities
 
+### 🌐 Web UI
+- **Built-in Web Interface**: A full-featured web dashboard starts automatically alongside the MCP server — no additional setup required
+- **Complete Tool Coverage**: Every MCP tool is accessible from the browser: add/view/delete documents, semantic search, AI search, file uploads, and context window exploration
+- **Drag & Drop Uploads**: Upload `.txt`, `.md`, and `.pdf` files directly from the browser
+- **Configurable**: Disable with `START_WEB_UI=false` or change the port with `WEB_PORT`
+
 ### 🔍 Search & Intelligence
 - **Hybrid Search**: Combined full-text and vector similarity powered by Orama, for both single-document and cross-document queries
 - **AI-Powered Search** 🤖: Advanced document analysis with Google Gemini AI for contextual understanding and intelligent insights (optional, requires API key)
@@ -55,6 +61,31 @@ Example configuration for an MCP client (e.g., Claude Desktop, VS Code):
 
 All environment variables are optional. Without `GEMINI_API_KEY`, only the local embedding-based search tools are available.
 
+### Web UI
+
+The web interface starts automatically on port **3080** when the MCP server launches. Open your browser at:
+
+```
+http://localhost:3080
+```
+
+From the web UI you can:
+- 📊 **Dashboard** — overview of all documents and stats
+- 📄 **Documents** — browse, view, and delete documents
+- ➕ **Add Document** — create documents with title, content, and metadata
+- 🔍 **Search All** — semantic search across all documents
+- 🎯 **Search in Doc** — search within a specific document
+- 🤖 **AI Search** — Gemini-powered analysis (if `GEMINI_API_KEY` is set)
+- 📁 **Upload Files** — drag & drop files and process them into the knowledge base
+- 🪟 **Context Window** — explore chunks around a specific index
+
+To run the web UI standalone (without the MCP server):
+
+```bash
+npm run web          # Development (tsx)
+npm run web:build    # Production (compiled)
+```
+
 ### Basic workflow
 
 1. Add documents using `add_document` or place `.txt` / `.md` / `.pdf` files in the uploads folder and call `process_uploads`.
@@ -98,6 +129,8 @@ Configure via environment variables or a `.env` file in the project root:
 | `MCP_EMBEDDING_MODEL` | `Xenova/all-MiniLM-L6-v2` | Embedding model name |
 | `GEMINI_API_KEY` | — | Google Gemini API key (enables `search_documents_with_ai`) |
 | `MCP_CACHE_ENABLED` | `true` | Enable/disable LRU embedding cache |
+| `START_WEB_UI` | `true` | Set to `false` to disable the built-in web interface |
+| `WEB_PORT` | `3080` | Port for the web UI |
 | `MCP_PARALLEL_ENABLED` | `true` | Enable parallel chunking for large documents |
 | `MCP_STREAMING_ENABLED` | `true` | Enable streaming reads for large files |
 | `MCP_STREAM_CHUNK_SIZE` | `65536` | Streaming buffer size in bytes (64KB) |
@@ -128,82 +161,19 @@ Models are downloaded on first use (~80–420 MB). The vector dimension is deter
 
 ⚠️ **Important**: Changing the embedding model requires re-adding all documents — embeddings from different models are incompatible. The Orama database is recreated automatically when the dimension changes.
 
-## Usage examples
-
-### Add a document
-
-```json
-{
-  "tool": "add_document",
-  "arguments": {
-    "title": "Python Basics",
-    "content": "Python is a high-level programming language...",
-    "metadata": { "category": "programming", "tags": ["python", "tutorial"] }
-  }
-}
-```
-
-### Search within a document
-
-```json
-{
-  "tool": "search_documents",
-  "arguments": {
-    "document_id": "abc123",
-    "query": "variable assignment",
-    "limit": 5
-  }
-}
-```
-
-### Cross-document search
-
-```json
-{
-  "tool": "search_all_documents",
-  "arguments": {
-    "query": "how to handle authentication",
-    "limit": 10
-  }
-}
-```
-
-### Fetch context around a chunk
-
-```json
-{
-  "tool": "get_context_window",
-  "arguments": {
-    "document_id": "abc123",
-    "chunk_index": 5,
-    "before": 2,
-    "after": 2
-  }
-}
-```
-
-### AI-powered analysis (requires `GEMINI_API_KEY`)
-
-```json
-{
-  "tool": "search_documents_with_ai",
-  "arguments": {
-    "document_id": "abc123",
-    "query": "explain the main concepts and their relationships"
-  }
-}
-```
-
 ## Architecture
 
 ```
-Server (FastMCP)
-  └─ DocumentManager
-       ├─ OramaStore          — Orama vector DB (chunks DB + docs DB), persistence, migration
-       ├─ IntelligentChunker  — Content-aware splitting (code, markdown, text, PDF)
-       ├─ EmbeddingProvider   — Local embeddings via @xenova/transformers
-       │    └─ EmbeddingCache — LRU in-memory cache
-       └─ GeminiSearchService — Optional AI search via Google Gemini
+Server (FastMCP, stdio)
+  ├─ Web UI (Express, port 3080)
+  │    └─ REST API → DocumentManager
+  └─ MCP Tools
+       └─ DocumentManager
+            ├─ OramaStore          — Orama vector DB (chunks DB + docs DB), persistence, migration
+            ├─ IntelligentChunker  — Content-aware splitting (code, markdown, text, PDF)
+            ├─ EmbeddingProvider   — Local embeddings via @xenova/transformers
+            │    └─ EmbeddingCache — LRU in-memory cache
+            └─ GeminiSearchService — Optional AI search via Google Gemini
 ```
 
 - **OramaStore** manages two Orama instances: one for document metadata/content and one for chunks with vector embeddings. Both are persisted to binary files on disk and restored on startup.
@@ -222,7 +192,9 @@ npm install
 npm run dev       # FastMCP dev mode with hot reload
 npm run build     # TypeScript compilation
 npm run inspect   # FastMCP web UI for interactive tool testing
-npm start         # Direct tsx execution
+npm start         # Direct tsx execution (MCP server + web UI)
+npm run web       # Run only the web UI (development)
+npm run web:build # Run only the web UI (compiled)
 ```
 
 ## Contributing
