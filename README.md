@@ -25,7 +25,7 @@ A TypeScript-based [Model Context Protocol (MCP)](https://modelcontextprotocol.i
 ### ⚡ Performance & Architecture
 - **Orama Vector DB**: Embedded search engine with zero native dependencies — replaces manual JSON storage and cosine similarity
 - **LRU Embedding Cache**: Avoids recomputing embeddings for repeated content and queries
-- **Intelligent Chunking**: Content-aware splitting (code, markdown, text) with adaptive sizing and parallel processing
+- **Parent-Child Chunking**: Documents are split into large context-preserving parent chunks and small precise child chunks for vector search — search results include both the matched fragment and the full surrounding context
 - **Streaming File Reader**: Handles large files without high memory usage
 - **Automatic Migration**: Legacy JSON documents are migrated to Orama on first startup — no manual intervention needed
 
@@ -131,7 +131,6 @@ Configure via environment variables or a `.env` file in the project root:
 | `MCP_CACHE_ENABLED` | `true` | Enable/disable LRU embedding cache |
 | `START_WEB_UI` | `true` | Set to `false` to disable the built-in web interface |
 | `WEB_PORT` | `3080` | Port for the web UI |
-| `MCP_PARALLEL_ENABLED` | `true` | Enable parallel chunking for large documents |
 | `MCP_STREAMING_ENABLED` | `true` | Enable streaming reads for large files |
 | `MCP_STREAM_CHUNK_SIZE` | `65536` | Streaming buffer size in bytes (64KB) |
 | `MCP_STREAM_FILE_SIZE_LIMIT` | `10485760` | Threshold to switch to streaming (10MB) |
@@ -141,8 +140,9 @@ Configure via environment variables or a `.env` file in the project root:
 ```
 ~/.mcp-documentation-server/     # Or custom path via MCP_BASE_DIR
 ├── data/
-│   ├── orama-chunks.msp         # Orama vector DB (chunks + embeddings)
+│   ├── orama-chunks.msp         # Orama vector DB (child chunks + embeddings)
 │   ├── orama-docs.msp           # Orama document DB (full content + metadata)
+│   ├── orama-parents.msp        # Orama parent chunks DB (context sections)
 │   ├── migration-complete.flag   # Written after legacy JSON migration
 │   └── *.md                     # Markdown copies of documents
 └── uploads/                     # Drop .txt, .md, .pdf files here
@@ -169,15 +169,15 @@ Server (FastMCP, stdio)
   │    └─ REST API → DocumentManager
   └─ MCP Tools
        └─ DocumentManager
-            ├─ OramaStore          — Orama vector DB (chunks DB + docs DB), persistence, migration
-            ├─ IntelligentChunker  — Content-aware splitting (code, markdown, text, PDF)
+            ├─ OramaStore          — Orama vector DB (chunks DB + docs DB + parents DB), persistence, migration
+            ├─ IntelligentChunker  — Parent-child chunking (code, markdown, text, PDF)
             ├─ EmbeddingProvider   — Local embeddings via @xenova/transformers
             │    └─ EmbeddingCache — LRU in-memory cache
             └─ GeminiSearchService — Optional AI search via Google Gemini
 ```
 
-- **OramaStore** manages two Orama instances: one for document metadata/content and one for chunks with vector embeddings. Both are persisted to binary files on disk and restored on startup.
-- **IntelligentChunker** detects content type and applies the best splitting strategy with adaptive chunk sizes.
+- **OramaStore** manages three Orama instances: one for document metadata/content, one for child chunks with vector embeddings, and one for parent chunks (context sections). All are persisted to binary files on disk and restored on startup.
+- **IntelligentChunker** implements the Parent-Child Chunking pattern: documents are first split into large parent chunks that preserve full context (sections, paragraphs), then each parent is further split into small child chunks for precise vector search. At query time, results are deduplicated by parent so that the LLM receives both the matched fragment and the broader context.
 - **EmbeddingProvider** lazily loads a Transformers.js model for local inference — no API calls needed.
 
 ## Development

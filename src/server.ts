@@ -76,17 +76,46 @@ server.addTool({
                 return "No chunks found matching your query in the specified document.";
             }
 
-            const searchResults = results.map(result => ({
-                // chunk_id: result.chunk.id,
-                document_id: result.chunk.document_id,
-                chunk_index: result.chunk.chunk_index,
-                score: result.score,
-                content: result.chunk.content,
-                // start_position: result.chunk.start_position,
-                // end_position: result.chunk.end_position,
-            }));
+            // Parent-child deduplication: group children by parent, keep best score per parent
+            const parentMap = new Map<string, {
+                document_id: string;
+                parent_index: number;
+                score: number;
+                matched_content: string;
+                parent_content: string;
+                chunk_index: number;
+                heading?: string;
+            }>();
+
+            for (const result of results) {
+                const parentIdx = result.chunk.metadata?.parent_index ?? result.chunk.chunk_index;
+                const key = `${result.chunk.document_id}_p${parentIdx}`;
+                const existing = parentMap.get(key);
+
+                if (!existing || result.score > existing.score) {
+                    // Lookup parent content from parents DB; falls back to child content for legacy docs
+                    let parentContent = await manager.getParentContent(result.chunk.document_id, parentIdx);
+                    if (!parentContent) {
+                        parentContent = result.chunk.content;
+                    }
+
+                    parentMap.set(key, {
+                        document_id: result.chunk.document_id,
+                        parent_index: parentIdx,
+                        score: result.score,
+                        matched_content: result.chunk.content,
+                        parent_content: parentContent,
+                        chunk_index: result.chunk.chunk_index,
+                        heading: result.chunk.metadata?.heading,
+                    });
+                }
+            }
+
+            const searchResults = Array.from(parentMap.values())
+                .sort((a, b) => b.score - a.score);
+
             const res = {
-                hint_for_llm: "After identifying the relevant chunks, use the get_context_window tool to retrieve additional context around each chunk of interest. You can call get_context_window multiple times until you have gathered enough context to answer the question.",
+                hint_for_llm: "Results use parent-child chunking. 'parent_content' provides the full context section. 'matched_content' shows the specific text that matched. Use get_context_window with chunk_index for even more surrounding context.",
                 results: searchResults,
             }
             return JSON.stringify(res, null, 2);
@@ -260,15 +289,46 @@ server.addTool({
                 return "No chunks found matching your query across all documents.";
             }
 
-            const searchResults = results.map(result => ({
-                document_id: result.chunk.document_id,
-                chunk_index: result.chunk.chunk_index,
-                score: result.score,
-                content: result.chunk.content,
-            }));
+            // Parent-child deduplication: group children by parent, keep best score per parent
+            const parentMap = new Map<string, {
+                document_id: string;
+                parent_index: number;
+                score: number;
+                matched_content: string;
+                parent_content: string;
+                chunk_index: number;
+                heading?: string;
+            }>();
+
+            for (const result of results) {
+                const parentIdx = result.chunk.metadata?.parent_index ?? result.chunk.chunk_index;
+                const key = `${result.chunk.document_id}_p${parentIdx}`;
+                const existing = parentMap.get(key);
+
+                if (!existing || result.score > existing.score) {
+                    // Lookup parent content from parents DB; falls back to child content for legacy docs
+                    let parentContent = await manager.getParentContent(result.chunk.document_id, parentIdx);
+                    if (!parentContent) {
+                        parentContent = result.chunk.content;
+                    }
+
+                    parentMap.set(key, {
+                        document_id: result.chunk.document_id,
+                        parent_index: parentIdx,
+                        score: result.score,
+                        matched_content: result.chunk.content,
+                        parent_content: parentContent,
+                        chunk_index: result.chunk.chunk_index,
+                        heading: result.chunk.metadata?.heading,
+                    });
+                }
+            }
+
+            const searchResults = Array.from(parentMap.values())
+                .sort((a, b) => b.score - a.score);
 
             const res = {
-                hint_for_llm: "After identifying the relevant chunks, use the get_context_window tool to retrieve additional context around each chunk of interest. You can call get_context_window multiple times until you have gathered enough context to answer the question.",
+                hint_for_llm: "Results use parent-child chunking. 'parent_content' provides the full context section. 'matched_content' shows the specific text that matched. Use get_context_window with chunk_index for even more surrounding context.",
                 results: searchResults,
             };
             return JSON.stringify(res, null, 2);

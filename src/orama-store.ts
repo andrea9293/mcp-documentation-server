@@ -4,7 +4,7 @@ import { persistToFile, restoreFromFile } from '@orama/plugin-data-persistence/s
 import { existsSync, mkdirSync } from 'fs';
 import { readdir, readFile } from 'fs/promises';
 import * as path from 'path';
-import { Document, DocumentChunk, SearchResult, OramaChunkDocument, OramaDocDocument } from './types.js';
+import { Document, DocumentChunk, SearchResult, OramaChunkDocument, OramaDocDocument, OramaParentDocument, ParentChunkData } from './types.js';
 import { getDefaultDataDir } from './utils.js';
 
 /**
@@ -13,9 +13,11 @@ import { getDefaultDataDir } from './utils.js';
 export class OramaStore {
     private chunksDb: AnyOrama | null = null;
     private docsDb: AnyOrama | null = null;
+    private parentsDb: AnyOrama | null = null;
     private dataDir: string;
     private chunksDbPath: string;
     private docsDbPath: string;
+    private parentsDbPath: string;
     private migrationFlagPath: string;
     private vectorDimensions: number;
     private initialized = false;
@@ -25,6 +27,7 @@ export class OramaStore {
         this.dataDir = path.join(baseDir, 'data');
         this.chunksDbPath = path.join(this.dataDir, 'orama-chunks.msp');
         this.docsDbPath = path.join(this.dataDir, 'orama-docs.msp');
+        this.parentsDbPath = path.join(this.dataDir, 'orama-parents.msp');
         this.migrationFlagPath = path.join(this.dataDir, 'migration-complete.flag');
         this.vectorDimensions = vectorDimensions;
 
@@ -44,6 +47,7 @@ export class OramaStore {
 
         let restoredChunks = false;
         let restoredDocs = false;
+        let restoredParents = false;
 
         // Try restoring chunks DB
         if (existsSync(this.chunksDbPath)) {
@@ -67,6 +71,17 @@ export class OramaStore {
             }
         }
 
+        // Try restoring parents DB
+        if (existsSync(this.parentsDbPath)) {
+            try {
+                this.parentsDb = await restoreFromFile('binary', this.parentsDbPath, 'node');
+                restoredParents = true;
+                console.error('[OramaStore] Restored parents DB from disk');
+            } catch (error) {
+                console.error('[OramaStore] Failed to restore parents DB, creating new:', error);
+            }
+        }
+
         // Create fresh DBs if restoration failed or files don't exist
         if (!restoredChunks) {
             this.chunksDb = this.createChunksDb();
@@ -78,9 +93,14 @@ export class OramaStore {
             console.error('[OramaStore] Created new docs DB');
         }
 
+        if (!restoredParents) {
+            this.parentsDb = this.createParentsDb();
+            console.error('[OramaStore] Created new parents DB');
+        }
+
         this.initialized = true;
 
-        console.error(`[OramaStore] Initialization finished. chunksDbPath=${this.chunksDbPath} docsDbPath=${this.docsDbPath} vectorDimensions=${this.vectorDimensions}`);
+        console.error(`[OramaStore] Initialization finished. vectorDimensions=${this.vectorDimensions}`);
         // Run migration from legacy JSON files if not already done
         if (!restoredChunks && !restoredDocs && !existsSync(this.migrationFlagPath)) {
             await this.migrateFromJson();
@@ -121,7 +141,24 @@ export class OramaStore {
     }
 
     /**
-     * Persist both DBs to disk
+     * Create a new parents Orama DB for parent-child chunking pattern.
+     * Parent chunks store full context sections referenced by child chunks.
+     */
+    private createParentsDb(): AnyOrama {
+        return create({
+            schema: {
+                document_id: 'string',
+                parent_index: 'number',
+                content: 'string',
+                heading: 'string',
+                start_position: 'number',
+                end_position: 'number',
+            },
+        });
+    }
+
+    /**
+     * Persist all DBs to disk
      */
     private async persistToDisk(): Promise<void> {
         try {
@@ -130,6 +167,9 @@ export class OramaStore {
             }
             if (this.docsDb) {
                 await persistToFile(this.docsDb, 'binary', this.docsDbPath, 'node');
+            }
+            if (this.parentsDb) {
+                await persistToFile(this.parentsDb, 'binary', this.parentsDbPath, 'node');
             }
             console.error('[OramaStore] Persisted DBs to disk');
         } catch (error) {
@@ -239,7 +279,49 @@ export class OramaStore {
     }
 
     /**
-     * Delete a document and all associated chunks
+     * Add parent chunks for a document (parent-child chunking pattern).
+     * Parents are stored in a separate DB, referenced by child metadata.parent_index.
+     */
+    async addParents(documentId: string, parents: ParentChunkData[]): Promise<void> {
+        if (!this.initialized) await this.initialize();
+        if (!this.parentsDb) throw new Error('OramaStore not initialized');
+
+        for (const parent of parents) {
+            const id = `${documentId}_parent_${parent.index}`;
+            await insert(this.parentsDb, {
+                id,
+                document_id: documentId,
+                parent_index: parent.index,
+                content: parent.content,
+                heading: parent.heading || '',
+                start_position: parent.startPosition,
+                end_position: parent.endPosition,
+            });
+        }
+
+        await this.persistToDisk();
+        console.error(`[OramaStore] Stored ${parents.length} parent chunks for document ${documentId}`);
+    }
+
+    /**
+     * Get a specific parent chunk by document_id and parent_index.
+     * Returns null if not found (legacy documents without parent-child chunking).
+     */
+    async getParentChunk(documentId: string, parentIndex: number): Promise<OramaParentDocument | null> {
+        if (!this.initialized) await this.initialize();
+        if (!this.parentsDb) return null;
+
+        const id = `${documentId}_parent_${parentIndex}`;
+        try {
+            const parent = getByID(this.parentsDb, id) as OramaParentDocument | undefined;
+            return parent || null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Delete a document and all associated chunks and parent chunks
      */
     async deleteDocument(documentId: string): Promise<boolean> {
         if (!this.initialized) await this.initialize();
@@ -279,6 +361,30 @@ export class OramaStore {
             }
         } catch (error) {
             console.error(`[OramaStore] Error removing chunks for ${documentId}:`, error);
+        }
+
+        // Remove associated parent chunks
+        if (this.parentsDb) {
+            try {
+                const parentResults = await search(this.parentsDb, {
+                    term: documentId,
+                    properties: ['document_id'],
+                    limit: 10000,
+                    threshold: 0,
+                }) as Results<OramaParentDocument>;
+
+                for (const hit of parentResults.hits) {
+                    if (hit.document.document_id === documentId) {
+                        try {
+                            await remove(this.parentsDb, hit.id);
+                        } catch {
+                            // parent may already be removed
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(`[OramaStore] Error removing parent chunks for ${documentId}:`, error);
+            }
         }
 
         if (deleted) {

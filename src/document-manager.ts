@@ -94,27 +94,29 @@ export class DocumentManager {
 
         console.error(`[DocumentManager] Adding document id=${id} title=${title}`);
 
-        // Create chunks using intelligent chunker
-        const chunks = await this.intelligentChunker.createChunks(id, content, {
-            maxSize: 500,
-            overlap: 75,
-            adaptiveSize: true,
-            addContext: true
-        });
+        // Create chunks using parent-child chunking pattern
+        // Returns children (small, embedded) and parents (large, context-preserving)
+        const { children, parents } = await this.intelligentChunker.createChunks(id, content);
 
         const document: Document = {
             id,
             title,
             content,
             metadata,
-            chunks,
+            chunks: children,
             created_at: now,
             updated_at: now,
         };
 
-        // Store in Orama
+        // Store document + children in Orama
         await this.oramaStore.addDocument(document);
         console.error(`[DocumentManager] Stored document in Orama: ${id}`);
+
+        // Store parent chunks in separate parents DB
+        if (parents.length > 0) {
+            await this.oramaStore.addParents(id, parents);
+            console.error(`[DocumentManager] Stored ${parents.length} parent chunks for: ${id}`);
+        }
 
         // Create markdown file with the document content
         const mdFilePath = this.getDocumentMdPath(id);
@@ -146,6 +148,16 @@ export class DocumentManager {
         console.error(`[DocumentManager] searchDocuments documentId=${documentId} query="${query}" limit=${limit}`);
         const queryEmbedding = await this.embeddingProvider.generateEmbedding(query);
         return this.oramaStore.searchChunks(queryEmbedding, limit, documentId);
+    }
+
+    /**
+     * Get parent chunk content by document_id and parent_index.
+     * Returns null if the parent is not found (legacy documents pre-parent-child chunking).
+     */
+    async getParentContent(documentId: string, parentIndex: number): Promise<string | null> {
+        await this.ensureOramaInitialized();
+        const parent = await this.oramaStore.getParentChunk(documentId, parentIndex);
+        return parent ? parent.content : null;
     }
 
     /**

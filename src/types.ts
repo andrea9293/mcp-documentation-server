@@ -115,6 +115,33 @@ export interface OramaDocDocument {
     metadata: string; // stringified JSON
 }
 
+// Parent chunk stored in its own Orama DB (parent-child chunking pattern)
+export interface OramaParentDocument {
+    id: string;
+    document_id: string;
+    parent_index: number;
+    content: string;
+    heading: string;
+    start_position: number;
+    end_position: number;
+}
+
+// Data returned by IntelligentChunker for each parent
+export interface ParentChunkData {
+    index: number;
+    content: string;
+    startPosition: number;
+    endPosition: number;
+    heading?: string;
+    contentType: string;
+}
+
+// Result of chunking: children (for embedding) + parents (for context)
+export interface ChunkingResult {
+    children: DocumentChunk[];
+    parents: ParentChunkData[];
+}
+
 export interface ServerConfig {
     dataDir?: string;
     embeddingProvider?: EmbeddingProvider;
