@@ -93,6 +93,28 @@ export interface DocumentStorage {
     search(embedding: number[], options?: SearchOptions): Promise<SearchResult[]>;
 }
 
+// Orama DB schema types
+export interface OramaChunkDocument {
+    id: string;
+    document_id: string;
+    document_title: string;
+    chunk_index: number;
+    content: string;
+    embedding: number[];
+    start_position: number;
+    end_position: number;
+    metadata: string; // stringified JSON
+}
+
+export interface OramaDocDocument {
+    id: string;
+    title: string;
+    content: string;
+    created_at: string;
+    updated_at: string;
+    metadata: string; // stringified JSON
+}
+
 export interface ServerConfig {
     dataDir?: string;
     embeddingProvider?: EmbeddingProvider;

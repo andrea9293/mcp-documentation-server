@@ -243,6 +243,40 @@ server.addTool({
 });
 
 
+// Search across all documents tool
+server.addTool({
+    name: "search_all_documents",
+    description: "Search for relevant chunks across ALL documents in the knowledge base using semantic similarity (hybrid: full-text + vector). Useful for cross-document search when you don't know which document contains the answer.",
+    parameters: z.object({
+        query: z.string().describe("The search query"),
+        limit: z.number().optional().default(10).describe("Maximum number of chunk results to return"),
+    }), execute: async (args) => {
+        try {
+            const manager = await initializeDocumentManager();
+            const results = await manager.searchAllDocuments(args.query, args.limit);
+
+            if (results.length === 0) {
+                return "No chunks found matching your query across all documents.";
+            }
+
+            const searchResults = results.map(result => ({
+                document_id: result.chunk.document_id,
+                chunk_index: result.chunk.chunk_index,
+                score: result.score,
+                content: result.chunk.content,
+            }));
+
+            const res = {
+                hint_for_llm: "After identifying the relevant chunks, use the get_context_window tool to retrieve additional context around each chunk of interest. You can call get_context_window multiple times until you have gathered enough context to answer the question.",
+                results: searchResults,
+            };
+            return JSON.stringify(res, null, 2);
+        } catch (error) {
+            throw new Error(`Cross-document search failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    },
+});
+
 // MCP tool: get_context_window
 server.addTool({
     name: "get_context_window",
