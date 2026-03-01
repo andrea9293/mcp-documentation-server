@@ -12,7 +12,7 @@ import { deduplicateSearchResults, formatDocumentList } from './search-utils.js'
 // Initialize server
 const server = new FastMCP({
     name: "Documentation Server",
-    version: "1.0.0",
+    version: "2.0.0",
 });
 
 // Initialize with default embedding provider
@@ -80,7 +80,7 @@ server.addTool({
             const searchResults = await deduplicateSearchResults(results, manager);
 
             const res = {
-                hint_for_llm: "Results use parent-child chunking. 'parent_content' provides the full context section. 'matched_content' shows the specific text that matched. Use get_context_window with chunk_index for even more surrounding context.",
+                hint_for_llm: "Results return parent-level content sections. Use get_context_window with document_id and parent_index to navigate surrounding parent sections.",
                 results: searchResults,
             }
             return JSON.stringify(res, null, 2);
@@ -249,7 +249,7 @@ server.addTool({
             const searchResults = await deduplicateSearchResults(results, manager);
 
             const res = {
-                hint_for_llm: "Results use parent-child chunking. 'parent_content' provides the full context section. 'matched_content' shows the specific text that matched. Use get_context_window with chunk_index for even more surrounding context.",
+                hint_for_llm: "Results return parent-level content sections. Use get_context_window with document_id and parent_index to navigate surrounding parent sections.",
                 results: searchResults,
             };
             return JSON.stringify(res, null, 2);
@@ -262,40 +262,20 @@ server.addTool({
 // MCP tool: get_context_window
 server.addTool({
     name: "get_context_window",
-    description: "Returns a window of chunks around a central chunk given document_id, chunk_index, before, after. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
+    description: "Returns a window of parent content sections around a central parent_index. Use parent_index values from search results. Always tell the user if result is truncated because of length.",
     parameters: z.object({
         document_id: z.string().describe("The document ID"),
-        chunk_index: z.number().describe("The index of the central chunk"),
-        before: z.number().default(1).describe("Number of previous chunks to include"),
-        after: z.number().default(1).describe("Number of next chunks to include")
+        parent_index: z.number().describe("The parent_index of the central section (from search results)"),
+        before: z.number().default(1).describe("Number of previous parent sections to include"),
+        after: z.number().default(1).describe("Number of next parent sections to include")
     }),
-    async execute({ document_id, chunk_index, before, after }) {
+    async execute({ document_id, parent_index, before, after }) {
         const manager = await initializeDocumentManager();
-        const document = await manager.getDocument(document_id);
-        if (!document || !document.chunks || !Array.isArray(document.chunks)) {
-            throw new Error("Document or chunk not found");
+        const result = await manager.getParentWindow(document_id, parent_index, before, after);
+        if (!result) {
+            throw new Error("Document not found or no parent sections available");
         }
-        const total = document.chunks.length;
-        let windowChunks;
-        let range;
-        
-        const start = Math.max(0, chunk_index - before);
-        const end = Math.min(total, chunk_index + after + 1);
-        windowChunks = document.chunks.slice(start, end).map(chunk => ({
-            chunk_index: chunk.chunk_index,
-            content: chunk.content,
-            // start_position: chunk.start_position,
-            // end_position: chunk.end_position,
-            // type: chunk.metadata?.type || null
-        }));
-        range = [start, end - 1];
-        
-        return JSON.stringify({
-            window: windowChunks,
-            center: chunk_index,
-            // range,
-            total_chunks: total
-        }, null, 2);
+        return JSON.stringify(result, null, 2);
     }
 });
 

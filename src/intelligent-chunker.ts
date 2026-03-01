@@ -369,40 +369,40 @@ export class IntelligentChunker {
     private resolveOptions(contentType: ContentType, userOpts: ParentChildChunkOptions): ResolvedOptions {
         const defaults: Record<ContentType, ResolvedOptions> = {
             [ContentType.TEXT]: {
-                parentMaxSize: 1500,
-                childMaxSize: 300,
+                parentMaxSize: 5800,
+                childMaxSize: 1000,
                 childOverlap: 50,
-                parentOverlap: 100,
+                parentOverlap: 0,
             },
             [ContentType.MARKDOWN]: {
-                parentMaxSize: 2000,
-                childMaxSize: 400,
+                parentMaxSize: 7800,
+                childMaxSize: 1400,
                 childOverlap: 60,
-                parentOverlap: 100,
+                parentOverlap: 0,
             },
             [ContentType.CODE]: {
-                parentMaxSize: 800,
-                childMaxSize: 200,
+                parentMaxSize: 3000,
+                childMaxSize: 600,
                 childOverlap: 40,
-                parentOverlap: 50,
+                parentOverlap: 0,
             },
             [ContentType.HTML]: {
-                parentMaxSize: 1500,
-                childMaxSize: 300,
+                parentMaxSize: 5800,
+                childMaxSize: 1000,
                 childOverlap: 50,
-                parentOverlap: 80,
+                parentOverlap: 0,
             },
             [ContentType.PDF]: {
-                parentMaxSize: 1500,
-                childMaxSize: 350,
+                parentMaxSize: 5800,
+                childMaxSize: 1200,
                 childOverlap: 60,
-                parentOverlap: 100,
+                parentOverlap: 0,
             },
             [ContentType.MIXED]: {
-                parentMaxSize: 1200,
-                childMaxSize: 300,
+                parentMaxSize: 4600,
+                childMaxSize: 1000,
                 childOverlap: 50,
-                parentOverlap: 80,
+                parentOverlap: 0,
             },
         };
 

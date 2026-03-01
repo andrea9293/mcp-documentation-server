@@ -702,7 +702,7 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Chunk Index</label>
+                            <label>Parent Index</label>
                             <input type="number" id="cw-index" value="0" min="0" required>
                         </div>
                         <div class="form-group">
@@ -990,17 +990,13 @@ document.getElementById('search-all-form').addEventListener('submit', async (e) 
             results.map((r, i) => `
                 <div class="result-item">
                     <div class="result-header">
-                        <div class="result-meta">📄 <strong>${getDocTitle(r.document_id)}</strong> · Chunk #${r.chunk_index}${r.parent_index !== undefined ? ` · Parent #${r.parent_index}` : ''}</div>
+                        <div class="result-meta">📄 <strong>${getDocTitle(r.document_id)}</strong> · Section #${r.parent_index}</div>
                         <span class="result-score ${scoreClass(r.score)}">${(r.score * 100).toFixed(1)}%</span>
                     </div>
                     ${r.heading ? `<div class="result-heading">§ ${escHtml(r.heading)}</div>` : ''}
-                    <div class="result-content">${escHtml(r.matched_content || r.content)}</div>
-                    ${r.parent_content && r.parent_content !== (r.matched_content || r.content) ? `
-                        <div class="parent-toggle" onclick="this.nextElementSibling.classList.toggle('open');this.textContent=this.textContent.includes('▶')?'▼ Hide full context':'▶ Show full context'">▶ Show full context</div>
-                        <div class="parent-content">${escHtml(r.parent_content)}</div>
-                    ` : ''}
+                    <div class="result-content">${escHtml(r.content)}</div>
                     <div style="margin-top:8px">
-                        <button class="btn btn-secondary btn-sm" onclick="loadContext('${r.document_id}', ${r.chunk_index})">🪟 Context</button>
+                        <button class="btn btn-secondary btn-sm" onclick="loadContext('${r.document_id}', ${r.parent_index})">🪟 Context</button>
                     </div>
                 </div>
             `).join('') + '</div>';
@@ -1028,17 +1024,13 @@ document.getElementById('search-doc-form').addEventListener('submit', async (e) 
             results.map(r => `
                 <div class="result-item">
                     <div class="result-header">
-                        <div class="result-meta">Chunk #${r.chunk_index}${r.parent_index !== undefined ? ` · Parent #${r.parent_index}` : ''}</div>
+                        <div class="result-meta">Section #${r.parent_index}</div>
                         <span class="result-score ${scoreClass(r.score)}">${(r.score * 100).toFixed(1)}%</span>
                     </div>
                     ${r.heading ? `<div class="result-heading">§ ${escHtml(r.heading)}</div>` : ''}
-                    <div class="result-content">${escHtml(r.matched_content || r.content)}</div>
-                    ${r.parent_content && r.parent_content !== (r.matched_content || r.content) ? `
-                        <div class="parent-toggle" onclick="this.nextElementSibling.classList.toggle('open');this.textContent=this.textContent.includes('▶')?'▼ Hide full context':'▶ Show full context'">▶ Show full context</div>
-                        <div class="parent-content">${escHtml(r.parent_content)}</div>
-                    ` : ''}
+                    <div class="result-content">${escHtml(r.content)}</div>
                     <div style="margin-top:8px">
-                        <button class="btn btn-secondary btn-sm" onclick="loadContext('${r.document_id}', ${r.chunk_index})">🪟 Context</button>
+                        <button class="btn btn-secondary btn-sm" onclick="loadContext('${r.document_id}', ${r.parent_index})">🪟 Context</button>
                     </div>
                 </div>
             `).join('') + '</div>';
@@ -1159,24 +1151,24 @@ async function uploadFiles(files) {
 document.getElementById('context-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const document_id = document.getElementById('cw-docid').value;
-    const chunk_index = parseInt(document.getElementById('cw-index').value);
+    const parent_index = parseInt(document.getElementById('cw-index').value);
     const before = parseInt(document.getElementById('cw-before').value);
     const after = parseInt(document.getElementById('cw-after').value);
     const container = document.getElementById('context-results');
     container.innerHTML = '<div style="text-align:center;padding:20px"><span class="spinner"></span> Loading...</div>';
     try {
-        const result = await api('POST', '/context-window', { document_id, chunk_index, before, after });
+        const result = await api('POST', '/context-window', { document_id, parent_index, before, after });
         container.innerHTML = `<div class="card">
-            <div class="card-title">Context Window (Total chunks: ${result.total_chunks})</div>
+            <div class="card-title">Context Window (Total sections: ${result.total_parents})</div>
             <div class="chunk-nav">
                 ${result.window.map(c => `
-                    <span class="chunk-badge ${c.chunk_index === result.center ? 'center' : ''}">#${c.chunk_index}</span>
+                    <span class="chunk-badge ${c.parent_index === result.center ? 'center' : ''}">#${c.parent_index}</span>
                 `).join('')}
             </div>
             ${result.window.map(c => `
-                <div class="result-item" style="${c.chunk_index === result.center ? 'border-color:var(--accent)' : ''}">
+                <div class="result-item" style="${c.parent_index === result.center ? 'border-color:var(--accent)' : ''}">
                     <div class="result-header">
-                        <div class="result-meta">Chunk #${c.chunk_index} ${c.chunk_index === result.center ? '(center)' : ''}</div>
+                        <div class="result-meta">Section #${c.parent_index} ${c.parent_index === result.center ? '(center)' : ''}${c.heading ? ' — § ' + escHtml(c.heading) : ''}</div>
                     </div>
                     <div class="result-content">${escHtml(c.content)}</div>
                 </div>
@@ -1189,9 +1181,9 @@ document.getElementById('context-form').addEventListener('submit', async (e) => 
 });
 
 // Context shortcut from search results
-function loadContext(docId, chunkIdx) {
+function loadContext(docId, parentIdx) {
     document.getElementById('cw-docid').value = docId;
-    document.getElementById('cw-index').value = chunkIdx;
+    document.getElementById('cw-index').value = parentIdx;
     navigateTo('context-window');
     document.getElementById('context-form').dispatchEvent(new Event('submit'));
 }

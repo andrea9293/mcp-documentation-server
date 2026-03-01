@@ -321,6 +321,33 @@ export class OramaStore {
     }
 
     /**
+     * Get all parent chunks for a document, sorted by parent_index.
+     * Returns empty array if no parents found (legacy documents).
+     */
+    async getParentChunksForDocument(documentId: string): Promise<OramaParentDocument[]> {
+        if (!this.initialized) await this.initialize();
+        if (!this.parentsDb) return [];
+
+        try {
+            const results = await search(this.parentsDb, {
+                term: documentId,
+                properties: ['document_id'],
+                limit: 100000,
+                threshold: 0,
+            });
+
+            const parents = results.hits
+                .map(hit => hit.document as unknown as OramaParentDocument)
+                .filter(p => p.document_id === documentId)
+                .sort((a, b) => a.parent_index - b.parent_index);
+
+            return parents;
+        } catch {
+            return [];
+        }
+    }
+
+    /**
      * Delete a document and all associated chunks and parent chunks
      */
     async deleteDocument(documentId: string): Promise<boolean> {

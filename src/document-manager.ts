@@ -161,6 +161,36 @@ export class DocumentManager {
     }
 
     /**
+     * Get a window of parent chunks around a central parent_index.
+     * Returns parent-level content for context window navigation.
+     */
+    async getParentWindow(documentId: string, parentIndex: number, before: number, after: number) {
+        await this.ensureOramaInitialized();
+        const allParents = await this.oramaStore.getParentChunksForDocument(documentId);
+        if (allParents.length === 0) {
+            return null;
+        }
+        const total = allParents.length;
+        // Find the position of the requested parent_index in the sorted array
+        const centerPos = allParents.findIndex(p => p.parent_index === parentIndex);
+        if (centerPos === -1) {
+            throw new Error(`Parent index ${parentIndex} not found for document ${documentId}`);
+        }
+        const start = Math.max(0, centerPos - before);
+        const end = Math.min(total, centerPos + after + 1);
+        const windowParents = allParents.slice(start, end).map(p => ({
+            parent_index: p.parent_index,
+            content: p.content,
+            heading: p.heading || undefined,
+        }));
+        return {
+            window: windowParents,
+            center: parentIndex,
+            total_parents: total,
+        };
+    }
+
+    /**
      * Search across all documents (cross-document semantic search)
      */
     async searchAllDocuments(query: string, limit = 10): Promise<SearchResult[]> {

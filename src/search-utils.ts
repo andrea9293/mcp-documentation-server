@@ -3,14 +3,13 @@ import { DocumentManager } from './document-manager.js';
 
 /**
  * Deduplicated search result after parent-child grouping.
+ * Only parent content is exposed; children are used internally for search only.
  */
 export interface DeduplicatedSearchResult {
     document_id: string;
     parent_index: number;
     score: number;
-    matched_content: string;
-    parent_content: string;
-    chunk_index: number;
+    content: string;
     heading?: string;
 }
 
@@ -40,9 +39,7 @@ export async function deduplicateSearchResults(
                 document_id: result.chunk.document_id,
                 parent_index: parentIdx,
                 score: result.score,
-                matched_content: result.chunk.content,
-                parent_content: parentContent,
-                chunk_index: result.chunk.chunk_index,
+                content: parentContent,
                 heading: result.chunk.metadata?.heading,
             });
         }

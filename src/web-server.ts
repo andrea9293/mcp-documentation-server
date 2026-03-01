@@ -163,28 +163,21 @@ app.post('/api/search-all', async (req, res): Promise<void> => {
     }
 });
 
-// POST /api/context-window — get context window around a chunk
+// POST /api/context-window — get context window around a parent section
 app.post('/api/context-window', async (req, res): Promise<void> => {
     try {
-        const { document_id, chunk_index, before, after } = req.body;
-        if (!document_id || chunk_index === undefined) {
-            res.status(400).json({ error: 'document_id and chunk_index are required' });
+        const { document_id, parent_index, before, after } = req.body;
+        if (!document_id || parent_index === undefined) {
+            res.status(400).json({ error: 'document_id and parent_index are required' });
             return;
         }
         const manager = await getManager();
-        const document = await manager.getDocument(document_id);
-        if (!document || !document.chunks) {
-            res.status(404).json({ error: 'Document or chunks not found' });
+        const result = await manager.getParentWindow(document_id, parent_index, before || 1, after || 1);
+        if (!result) {
+            res.status(404).json({ error: 'Document not found or no parent sections available' });
             return;
         }
-        const total = document.chunks.length;
-        const start = Math.max(0, chunk_index - (before || 1));
-        const end = Math.min(total, chunk_index + (after || 1) + 1);
-        const windowChunks = document.chunks.slice(start, end).map(chunk => ({
-            chunk_index: chunk.chunk_index,
-            content: chunk.content,
-        }));
-        res.json({ window: windowChunks, center: chunk_index, total_chunks: total });
+        res.json(result);
     } catch (error) {
         res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
     }
