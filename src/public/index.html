@@ -258,6 +258,34 @@
             max-height: 200px;
             overflow-y: auto;
         }
+        .parent-toggle {
+            font-size: 11px;
+            color: var(--accent);
+            cursor: pointer;
+            margin-top: 6px;
+            user-select: none;
+        }
+        .parent-toggle:hover { text-decoration: underline; }
+        .parent-content {
+            display: none;
+            margin-top: 8px;
+            padding: 10px;
+            border-left: 3px solid var(--accent);
+            background: var(--bg-input);
+            border-radius: 4px;
+            font-size: 12px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .parent-content.open { display: block; }
+        .result-heading {
+            font-size: 12px;
+            color: var(--purple);
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
 
         /* ========= STATS ========= */
         .stats-row {
@@ -962,10 +990,15 @@ document.getElementById('search-all-form').addEventListener('submit', async (e) 
             results.map((r, i) => `
                 <div class="result-item">
                     <div class="result-header">
-                        <div class="result-meta">📄 <strong>${getDocTitle(r.document_id)}</strong> · Chunk #${r.chunk_index}</div>
+                        <div class="result-meta">📄 <strong>${getDocTitle(r.document_id)}</strong> · Chunk #${r.chunk_index}${r.parent_index !== undefined ? ` · Parent #${r.parent_index}` : ''}</div>
                         <span class="result-score ${scoreClass(r.score)}">${(r.score * 100).toFixed(1)}%</span>
                     </div>
-                    <div class="result-content">${escHtml(r.content)}</div>
+                    ${r.heading ? `<div class="result-heading">§ ${escHtml(r.heading)}</div>` : ''}
+                    <div class="result-content">${escHtml(r.matched_content || r.content)}</div>
+                    ${r.parent_content && r.parent_content !== (r.matched_content || r.content) ? `
+                        <div class="parent-toggle" onclick="this.nextElementSibling.classList.toggle('open');this.textContent=this.textContent.includes('▶')?'▼ Hide full context':'▶ Show full context'">▶ Show full context</div>
+                        <div class="parent-content">${escHtml(r.parent_content)}</div>
+                    ` : ''}
                     <div style="margin-top:8px">
                         <button class="btn btn-secondary btn-sm" onclick="loadContext('${r.document_id}', ${r.chunk_index})">🪟 Context</button>
                     </div>
@@ -995,10 +1028,15 @@ document.getElementById('search-doc-form').addEventListener('submit', async (e) 
             results.map(r => `
                 <div class="result-item">
                     <div class="result-header">
-                        <div class="result-meta">Chunk #${r.chunk_index}</div>
+                        <div class="result-meta">Chunk #${r.chunk_index}${r.parent_index !== undefined ? ` · Parent #${r.parent_index}` : ''}</div>
                         <span class="result-score ${scoreClass(r.score)}">${(r.score * 100).toFixed(1)}%</span>
                     </div>
-                    <div class="result-content">${escHtml(r.content)}</div>
+                    ${r.heading ? `<div class="result-heading">§ ${escHtml(r.heading)}</div>` : ''}
+                    <div class="result-content">${escHtml(r.matched_content || r.content)}</div>
+                    ${r.parent_content && r.parent_content !== (r.matched_content || r.content) ? `
+                        <div class="parent-toggle" onclick="this.nextElementSibling.classList.toggle('open');this.textContent=this.textContent.includes('▶')?'▼ Hide full context':'▶ Show full context'">▶ Show full context</div>
+                        <div class="parent-content">${escHtml(r.parent_content)}</div>
+                    ` : ''}
                     <div style="margin-top:8px">
                         <button class="btn btn-secondary btn-sm" onclick="loadContext('${r.document_id}', ${r.chunk_index})">🪟 Context</button>
                     </div>

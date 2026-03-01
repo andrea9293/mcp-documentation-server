@@ -7,6 +7,7 @@ import { createLazyEmbeddingProvider } from './embedding-provider.js';
 import { DocumentManager } from './document-manager.js';
 import { GeminiSearchService } from './gemini-search-service.js';
 import { startWebServer } from './web-server.js';
+import { deduplicateSearchResults, formatDocumentList } from './search-utils.js';
 
 // Initialize server
 const server = new FastMCP({
@@ -76,43 +77,7 @@ server.addTool({
                 return "No chunks found matching your query in the specified document.";
             }
 
-            // Parent-child deduplication: group children by parent, keep best score per parent
-            const parentMap = new Map<string, {
-                document_id: string;
-                parent_index: number;
-                score: number;
-                matched_content: string;
-                parent_content: string;
-                chunk_index: number;
-                heading?: string;
-            }>();
-
-            for (const result of results) {
-                const parentIdx = result.chunk.metadata?.parent_index ?? result.chunk.chunk_index;
-                const key = `${result.chunk.document_id}_p${parentIdx}`;
-                const existing = parentMap.get(key);
-
-                if (!existing || result.score > existing.score) {
-                    // Lookup parent content from parents DB; falls back to child content for legacy docs
-                    let parentContent = await manager.getParentContent(result.chunk.document_id, parentIdx);
-                    if (!parentContent) {
-                        parentContent = result.chunk.content;
-                    }
-
-                    parentMap.set(key, {
-                        document_id: result.chunk.document_id,
-                        parent_index: parentIdx,
-                        score: result.score,
-                        matched_content: result.chunk.content,
-                        parent_content: parentContent,
-                        chunk_index: result.chunk.chunk_index,
-                        heading: result.chunk.metadata?.heading,
-                    });
-                }
-            }
-
-            const searchResults = Array.from(parentMap.values())
-                .sort((a, b) => b.score - a.score);
+            const searchResults = await deduplicateSearchResults(results, manager);
 
             const res = {
                 hint_for_llm: "Results use parent-child chunking. 'parent_content' provides the full context section. 'matched_content' shows the specific text that matched. Use get_context_window with chunk_index for even more surrounding context.",
@@ -156,15 +121,7 @@ server.addTool({
             const manager = await initializeDocumentManager();
             const documents = await manager.getAllDocuments();
 
-            const documentList = documents.map(doc => ({
-                id: doc.id,
-                title: doc.title,
-                created_at: doc.created_at,
-                updated_at: doc.updated_at,
-                metadata: doc.metadata,
-                content_preview: doc.content.substring(0, 700) + "...",
-                chunks_count: doc.chunks.length,
-            }));
+            const documentList = formatDocumentList(documents);
 
             return JSON.stringify(documentList, null, 2);
         } catch (error) {
@@ -289,43 +246,7 @@ server.addTool({
                 return "No chunks found matching your query across all documents.";
             }
 
-            // Parent-child deduplication: group children by parent, keep best score per parent
-            const parentMap = new Map<string, {
-                document_id: string;
-                parent_index: number;
-                score: number;
-                matched_content: string;
-                parent_content: string;
-                chunk_index: number;
-                heading?: string;
-            }>();
-
-            for (const result of results) {
-                const parentIdx = result.chunk.metadata?.parent_index ?? result.chunk.chunk_index;
-                const key = `${result.chunk.document_id}_p${parentIdx}`;
-                const existing = parentMap.get(key);
-
-                if (!existing || result.score > existing.score) {
-                    // Lookup parent content from parents DB; falls back to child content for legacy docs
-                    let parentContent = await manager.getParentContent(result.chunk.document_id, parentIdx);
-                    if (!parentContent) {
-                        parentContent = result.chunk.content;
-                    }
-
-                    parentMap.set(key, {
-                        document_id: result.chunk.document_id,
-                        parent_index: parentIdx,
-                        score: result.score,
-                        matched_content: result.chunk.content,
-                        parent_content: parentContent,
-                        chunk_index: result.chunk.chunk_index,
-                        heading: result.chunk.metadata?.heading,
-                    });
-                }
-            }
-
-            const searchResults = Array.from(parentMap.values())
-                .sort((a, b) => b.score - a.score);
+            const searchResults = await deduplicateSearchResults(results, manager);
 
             const res = {
                 hint_for_llm: "Results use parent-child chunking. 'parent_content' provides the full context section. 'matched_content' shows the specific text that matched. Use get_context_window with chunk_index for even more surrounding context.",
@@ -485,9 +406,11 @@ if (process.env.GEMINI_API_KEY) {
 // });
 
 // Start the server
-// Optionally start web UI alongside MCP server
+// Optionally start web UI alongside MCP server, sharing the same DocumentManager
 if (process.env.START_WEB_UI !== 'false') {
-    startWebServer().then(() => {
+    initializeDocumentManager().then(manager => {
+        return startWebServer(undefined, manager);
+    }).then(() => {
         console.error('[Server] Web UI started (port=' + (process.env.WEB_PORT || '3080') + ')');
     }).catch(err => {
         console.error('[Server] Failed to start Web UI:', err instanceof Error ? err.message : String(err));

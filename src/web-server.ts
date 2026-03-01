@@ -9,6 +9,7 @@ import { existsSync } from 'fs';
 import { createLazyEmbeddingProvider } from './embedding-provider.js';
 import { DocumentManager } from './document-manager.js';
 import { GeminiSearchService } from './gemini-search-service.js';
+import { deduplicateSearchResults, formatDocumentList } from './search-utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,9 +18,10 @@ const app = express();
 
 /**
  * Start the web UI server. Returns the http.Server instance.
+ * Accepts an optional shared DocumentManager to avoid duplicating state.
  * Call with `START_WEB_UI=false` to disable automatic start.
  */
-export async function startWebServer(portArg?: number) {
+export async function startWebServer(portArg?: number, sharedManager?: DocumentManager) {
     const PORT = parseInt(String(portArg || process.env.WEB_PORT || '3080'));
 
 // Middleware
@@ -34,15 +36,15 @@ const distPublicDir = path.join(__dirname, 'public');
 const staticDir = existsSync(distPublicDir) ? distPublicDir : publicDir;
 app.use(express.static(staticDir));
 
-// Lazy document manager initialization
-let documentManager: DocumentManager;
+// Lazy document manager initialization (uses shared instance if provided)
+let documentManager: DocumentManager | undefined = sharedManager;
 
 async function getManager(): Promise<DocumentManager> {
     if (!documentManager) {
         const embeddingModel = process.env.MCP_EMBEDDING_MODEL || 'Xenova/all-MiniLM-L6-v2';
         const embeddingProvider = createLazyEmbeddingProvider(embeddingModel);
         documentManager = new DocumentManager(embeddingProvider);
-        console.error(`[WebServer] Document manager initialized with: ${embeddingProvider.getModelName()}`);
+        console.error(`[WebServer] Document manager initialized locally with: ${embeddingProvider.getModelName()}`);
     }
     return documentManager;
 }
@@ -66,15 +68,7 @@ app.get('/api/documents', async (_req, res) => {
     try {
         const manager = await getManager();
         const documents = await manager.getAllDocuments();
-        const documentList = documents.map(doc => ({
-            id: doc.id,
-            title: doc.title,
-            created_at: doc.created_at,
-            updated_at: doc.updated_at,
-            metadata: doc.metadata,
-            content_preview: doc.content.substring(0, 700),
-            chunks_count: doc.chunks.length,
-        }));
+        const documentList = formatDocumentList(documents);
         res.json(documentList);
     } catch (error) {
         res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -143,12 +137,9 @@ app.post('/api/search', async (req, res): Promise<void> => {
             return;
         }
         const results = await manager.searchDocuments(document_id, query, limit || 10);
-        res.json(results.map(r => ({
-            document_id: r.chunk.document_id,
-            chunk_index: r.chunk.chunk_index,
-            score: r.score,
-            content: r.chunk.content,
-        })));
+
+        const searchResults = await deduplicateSearchResults(results, manager);
+        res.json(searchResults);
     } catch (error) {
         res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
     }
@@ -164,12 +155,9 @@ app.post('/api/search-all', async (req, res): Promise<void> => {
         }
         const manager = await getManager();
         const results = await manager.searchAllDocuments(query, limit || 10);
-        res.json(results.map(r => ({
-            document_id: r.chunk.document_id,
-            chunk_index: r.chunk.chunk_index,
-            score: r.score,
-            content: r.chunk.content,
-        })));
+
+        const searchResults = await deduplicateSearchResults(results, manager);
+        res.json(searchResults);
     } catch (error) {
         res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
     }
