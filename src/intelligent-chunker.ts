@@ -1,25 +1,19 @@
-import { EmbeddingProvider, DocumentChunk } from './types.js';
+import { EmbeddingProvider, DocumentChunk, ParentChunkData, ChunkingResult } from './types.js';
 
-export interface ChunkOptions {
-    maxSize?: number;
-    overlap?: number;
-    minSize?: number;
-    preserveCodeBlocks?: boolean;
-    preserveMarkdown?: boolean;
-    adaptiveSize?: boolean;
-    addContext?: boolean;
-}
-
-export interface ChunkMetadata {
-    type: 'code' | 'text' | 'markdown' | 'structured' | 'mixed';
-    language?: string;
-    section?: string;
-    heading?: string;
-    complexity_score?: number;
-    semantic_topic?: string;
-    surrounding_context?: string;
-    chunk_size: number;
-    original_document_type?: string;
+/**
+ * Options for parent-child chunking.
+ * Parent chunks are large context-preserving segments (not embedded directly).
+ * Child chunks are small precise segments used for vector search (embedded).
+ */
+export interface ParentChildChunkOptions {
+    /** Max size of parent chunks in characters */
+    parentMaxSize?: number;
+    /** Max size of child chunks in characters */
+    childMaxSize?: number;
+    /** Overlap between consecutive child chunks within the same parent */
+    childOverlap?: number;
+    /** Overlap between consecutive parent chunks */
+    parentOverlap?: number;
 }
 
 export enum ContentType {
@@ -31,6 +25,34 @@ export enum ContentType {
     MIXED = 'mixed'
 }
 
+interface ParentChunk {
+    index: number;
+    content: string;
+    startPosition: number;
+    endPosition: number;
+    heading?: string;
+    contentType: ContentType;
+}
+
+type ResolvedOptions = Required<ParentChildChunkOptions>;
+
+/**
+ * IntelligentChunker implements the Parent-Child Chunking pattern for RAG.
+ *
+ * Pattern (from "Parent-Child Chunking in LangChain for Advanced RAG"):
+ * 1. The document is split into large "parent" chunks that preserve full context
+ *    (entire sections, multiple paragraphs, or conceptually complete units).
+ * 2. Each parent is further split into small "child" chunks for precise matching.
+ * 3. Only child chunks are embedded and indexed for vector search.
+ * 4. Each child stores its parent's content in metadata.
+ * 5. At search time, child chunks enable precise query matching, but the
+ *    corresponding parent chunk is returned for richer context.
+ *
+ * Benefits:
+ * - Better context preservation (parent chunks maintain the broader narrative)
+ * - Higher search precision (child chunks match specific queries accurately)
+ * - Adaptive granularity (complex queries get full context, simple ones get focused answers)
+ */
 export class IntelligentChunker {
     private embeddingProvider: EmbeddingProvider;
 
@@ -39,843 +61,387 @@ export class IntelligentChunker {
     }
 
     /**
-     * Main chunking method that automatically detects content type and applies best strategy
+     * Main entry point: creates parent-child chunks from document content.
+     * Returns a ChunkingResult with:
+     *  - children: small chunks with embeddings (indexed for vector search)
+     *  - parents: large context chunks (stored separately, referenced by index)
      */
     async createChunks(
-        documentId: string, 
-        content: string, 
-        options: ChunkOptions = {}
-    ): Promise<DocumentChunk[]> {
-        const contentType = this.detectContentType(content);
-        
-        // Set default options based on content type
-        const mergedOptions = this.getOptimalOptions(contentType, options);
-        
-        console.error(`[IntelligentChunker] Processing ${contentType} content with ${mergedOptions.maxSize} max size`);
-        
-        // Check if parallel processing should be used
-        const useParallel = process.env.MCP_PARALLEL_ENABLED !== 'false' && 
-                           content.length > 10000; // Use parallel for large documents
-        
-        if (useParallel) {
-            try {
-                console.error(`[IntelligentChunker] Using parallel processing for large document (${content.length} chars)`);
-                return await this.createChunksParallel(documentId, content, contentType, mergedOptions);
-            } catch (error) {
-                console.warn('[IntelligentChunker] Parallel processing failed, falling back to sequential:', error);
-                // Fall through to sequential processing
-            }
-        }
-        
-        return await this.createChunksSequential(documentId, content, contentType, mergedOptions);
-    }
-
-    /**
-     * Sequential chunking (original implementation)
-     */
-    private async createChunksSequential(
-        documentId: string, 
-        content: string, 
-        contentType: ContentType,
-        options: ChunkOptions
-    ): Promise<DocumentChunk[]> {
-        let chunks: DocumentChunk[];
-        
-        switch (contentType) {
-            case ContentType.CODE:
-                chunks = await this.chunkCode(documentId, content, options);
-                break;
-            case ContentType.MARKDOWN:
-                chunks = await this.chunkMarkdown(documentId, content, options);
-                break;
-            case ContentType.HTML:
-                chunks = await this.chunkHtml(documentId, content, options);
-                break;
-            case ContentType.MIXED:
-                chunks = await this.chunkMixed(documentId, content, options);
-                break;
-            default:
-                chunks = await this.chunkText(documentId, content, options);
-        }
-        
-        // Apply semantic chunking if enabled
-        if (options.adaptiveSize) {
-            chunks = await this.applySemanticRefinement(chunks, options);
-        }
-        
-        // Add contextual information if enabled
-        if (options.addContext) {
-            chunks = await this.enrichWithContext(chunks, content);
-        }
-        
-        console.error(`[IntelligentChunker] Created ${chunks.length} chunks (sequential)`);
-        return chunks;
-    }
-
-    /**
-     * Parallel chunking for improved performance on large documents
-     */
-    private async createChunksParallel(
-        documentId: string, 
-        content: string, 
-        contentType: ContentType,
-        options: ChunkOptions
-    ): Promise<DocumentChunk[]> {
-        const maxWorkers = parseInt(process.env.MCP_MAX_WORKERS || '4');
-        
-        // For parallel processing, we first create basic chunks quickly
-        let initialChunks: DocumentChunk[];
-        
-        // Create initial chunks using appropriate strategy
-        switch (contentType) {
-            case ContentType.CODE:
-                initialChunks = await this.chunkCode(documentId, content, options);
-                break;
-            case ContentType.MARKDOWN:
-                initialChunks = await this.chunkMarkdown(documentId, content, options);
-                break;
-            case ContentType.HTML:
-                initialChunks = await this.chunkHtml(documentId, content, options);
-                break;
-            case ContentType.MIXED:
-                initialChunks = await this.chunkMixed(documentId, content, options);
-                break;
-            default:
-                initialChunks = await this.chunkText(documentId, content, options);
-        }
-
-        // Now process chunks in parallel batches
-        const batchSize = Math.max(1, Math.ceil(initialChunks.length / maxWorkers));
-        const batches: DocumentChunk[][] = [];
-        
-        for (let i = 0; i < initialChunks.length; i += batchSize) {
-            batches.push(initialChunks.slice(i, i + batchSize));
-        }
-
-        console.error(`[IntelligentChunker] Processing ${initialChunks.length} chunks in ${batches.length} parallel batches`);
-
-        // Process batches in parallel
-        const processedBatches = await Promise.all(
-            batches.map(async (batch, batchIndex) => {
-                try {
-                    return await this.processChunkBatch(batch, options, content);
-                } catch (error) {
-                    console.warn(`[IntelligentChunker] Batch ${batchIndex} failed, using original chunks:`, error);
-                    return batch; // Return original chunks if processing fails
-                }
-            })
-        );
-
-        // Flatten results
-        const chunks = processedBatches.flat();
-        
-        console.error(`[IntelligentChunker] Created ${chunks.length} chunks (parallel)`);
-        return chunks;
-    }
-
-    /**
-     * Process a batch of chunks (can be run in parallel)
-     */
-    private async processChunkBatch(
-        chunks: DocumentChunk[], 
-        options: ChunkOptions,
-        originalContent: string
-    ): Promise<DocumentChunk[]> {
-        let processedChunks = chunks;
-
-        // Apply semantic refinement to this batch
-        if (options.adaptiveSize) {
-            processedChunks = await this.applySemanticRefinement(processedChunks, options);
-        }
-
-        // Add contextual information if enabled
-        if (options.addContext) {
-            processedChunks = await this.enrichWithContext(processedChunks, originalContent);
-        }
-
-        return processedChunks;
-    }
-
-    /**
-     * Detect the type of content to determine chunking strategy
-     */
-    private detectContentType(content: string): ContentType {
-        const codePatterns = [
-            /^import\s+/m,
-            /^from\s+\w+\s+import/m,
-            /^\s*def\s+\w+/m,
-            /^\s*function\s+\w+/m,
-            /^\s*class\s+\w+/m,
-            /^\s*public\s+class/m,
-            /^\s*interface\s+\w+/m,
-            /^\s*export\s+(class|function|interface)/m,
-            /\{[\s\S]*\}/,
-            /^\s*if\s*\(/m,
-            /^\s*for\s*\(/m,
-            /^\s*while\s*\(/m
-        ];
-
-        const markdownPatterns = [
-            /^#{1,6}\s+/m,
-            /^\*\s+/m,
-            /^\d+\.\s+/m,
-            /\[.*\]\(.*\)/,
-            /```[\s\S]*?```/,
-            /^\|.*\|.*\|/m,
-            /^>\s+/m
-        ];
-
-        const htmlPatterns = [
-            /<html/i,
-            /<body/i,
-            /<div/i,
-            /<p>/i,
-            /<h[1-6]>/i,
-            /<script/i,
-            /<style/i
-        ];
-
-        // Count matches for each type
-        const codeScore = codePatterns.reduce((score, pattern) => 
-            score + (pattern.test(content) ? 1 : 0), 0);
-        const markdownScore = markdownPatterns.reduce((score, pattern) => 
-            score + (pattern.test(content) ? 1 : 0), 0);
-        const htmlScore = htmlPatterns.reduce((score, pattern) => 
-            score + (pattern.test(content) ? 1 : 0), 0);
-
-        // Check for mixed content
-        if ((codeScore > 0 && markdownScore > 0) || 
-            (codeScore > 0 && htmlScore > 0) || 
-            (markdownScore > 0 && htmlScore > 0) ||
-            (codeScore >= 2 && content.length > 1000)) { // Large docs with code are likely mixed
-            return ContentType.MIXED;
-        }
-
-        if (htmlScore >= 2) return ContentType.HTML;
-        if (markdownScore >= 2) return ContentType.MARKDOWN;
-        if (codeScore >= 2) return ContentType.CODE;
-        
-        return ContentType.TEXT;
-    }
-
-    /**
-     * Get optimal chunking options based on content type
-     */
-    private getOptimalOptions(contentType: ContentType, userOptions: ChunkOptions): ChunkOptions {
-        const defaults: Record<ContentType, ChunkOptions> = {
-            [ContentType.CODE]: {
-                maxSize: 150,
-                overlap: 30, // ~20% overlap
-                minSize: 50,
-                preserveCodeBlocks: true,
-                adaptiveSize: true,
-                addContext: true
-            },
-            [ContentType.MARKDOWN]: {
-                maxSize: 400,
-                overlap: 60, // ~15% overlap
-                minSize: 100,
-                preserveMarkdown: true,
-                adaptiveSize: true,
-                addContext: true
-            },
-            [ContentType.HTML]: {
-                maxSize: 300,
-                overlap: 50,
-                minSize: 80,
-                adaptiveSize: true,
-                addContext: true
-            },
-            [ContentType.TEXT]: {
-                maxSize: 500,
-                overlap: 75, // ~15% overlap
-                minSize: 100,
-                adaptiveSize: false,
-                addContext: true
-            },
-            [ContentType.MIXED]: {
-                maxSize: 300,
-                overlap: 60,
-                minSize: 80,
-                preserveCodeBlocks: true,
-                preserveMarkdown: true,
-                adaptiveSize: true,
-                addContext: true
-            },
-            [ContentType.PDF]: {
-                maxSize: 400,
-                overlap: 70, // ~17% overlap  
-                minSize: 100,
-                adaptiveSize: true,
-                addContext: true
-            }
-        };
-
-        return { ...defaults[contentType], ...userOptions };
-    }
-
-    /**
-     * Chunk code content with language-specific awareness
-     */
-    private async chunkCode(
-        documentId: string, 
-        content: string, 
-        options: ChunkOptions
-    ): Promise<DocumentChunk[]> {
-        const language = this.detectProgrammingLanguage(content);
-        const separators = this.getLanguageSpecificSeparators(language);
-        
-        // console.error(`[IntelligentChunker] Chunking ${language} code`);
-        
-        return this.recursiveChunk(documentId, content, separators, options, {
-            type: 'code',
-            language,
-            original_document_type: 'code'
-        });
-    }
-
-    /**
-     * Detect programming language from code content
-     */
-    private detectProgrammingLanguage(content: string): string {
-        const patterns: Record<string, RegExp[]> = {
-            'typescript': [/^import\s+.*from\s+['"].*['"];?$/m, /^export\s+(interface|type|class)/m, /:\s*\w+(\[\])?(\s*\|\s*\w+)*\s*[=;]/],
-            'javascript': [/^const\s+\w+\s*=\s*require\(/m, /^module\.exports\s*=/m, /^function\s+\w+/m],
-            'python': [/^def\s+\w+/m, /^import\s+\w+/m, /^from\s+\w+\s+import/m, /^class\s+\w+:/m],
-            'java': [/^public\s+class\s+\w+/m, /^import\s+\w+(\.\w+)*;/m, /^package\s+\w+/m],
-            'csharp': [/^using\s+\w+/m, /^namespace\s+\w+/m, /^public\s+(class|interface)/m],
-            'cpp': [/^#include\s*<.*>/m, /^using\s+namespace/m, /^class\s+\w+/m],
-            'rust': [/^use\s+\w+/m, /^fn\s+\w+/m, /^impl\s+\w+/m],
-            'go': [/^package\s+\w+/m, /^import\s*\(/m, /^func\s+\w+/m]
-        };
-
-        for (const [lang, regexes] of Object.entries(patterns)) {
-            const matches = regexes.reduce((count, regex) => count + (regex.test(content) ? 1 : 0), 0);
-            if (matches >= 2) return lang;
-        }
-
-        return 'unknown';
-    }
-
-    /**
-     * Get language-specific separators for better code chunking
-     */
-    private getLanguageSpecificSeparators(language: string): string[] {
-        const separators: Record<string, string[]> = {
-            'python': ['\nclass ', '\ndef ', '\n\ndef ', '\n\n', '\n', ' ', ''],
-            'javascript': ['\nfunction ', '\nclass ', '\nexport ', '\n\n', '\n', ' ', ''],
-            'typescript': ['\ninterface ', '\ntype ', '\nclass ', '\nfunction ', '\nexport ', '\n\n', '\n', ' ', ''],
-            'java': ['\npublic class ', '\npublic interface ', '\npublic ', '\n\n', '\n', ' ', ''],
-            'csharp': ['\npublic class ', '\npublic interface ', '\npublic ', '\n\n', '\n', ' ', ''],
-            'cpp': ['\nclass ', '\nvoid ', '\nint ', '\n\n', '\n', ' ', ''],
-            'rust': ['\nfn ', '\nimpl ', '\nstruct ', '\nenum ', '\n\n', '\n', ' ', ''],
-            'go': ['\nfunc ', '\ntype ', '\nstruct ', '\n\n', '\n', ' ', '']
-        };
-
-        return separators[language] || ['\n\n', '\n', ' ', ''];
-    }
-
-    /**
-     * Chunk markdown content preserving structure
-     */
-    private async chunkMarkdown(
-        documentId: string, 
-        content: string, 
-        options: ChunkOptions
-    ): Promise<DocumentChunk[]> {
-        const separators = [
-            '\n## ', '\n### ', '\n#### ', '\n##### ', '\n###### ',  // Headers
-            '\n\n', // Paragraphs
-            '\n', // Lines
-            '. ', // Sentences
-            ' ', // Words
-            '' // Characters
-        ];
-
-        return this.recursiveChunk(documentId, content, separators, options, {
-            type: 'markdown',
-            original_document_type: 'markdown'
-        });
-    }
-
-    /**
-     * Chunk HTML content preserving structure
-     */
-    private async chunkHtml(
-        documentId: string, 
-        content: string, 
-        options: ChunkOptions
-    ): Promise<DocumentChunk[]> {
-        const separators = [
-            '</div>', '</section>', '</article>', '</p>',
-            '\n\n', '\n', '. ', ' ', ''
-        ];
-
-        return this.recursiveChunk(documentId, content, separators, options, {
-            type: 'structured',
-            original_document_type: 'html'
-        });
-    }
-
-    /**
-     * Chunk mixed content using hybrid approach
-     */
-    private async chunkMixed(
-        documentId: string, 
-        content: string, 
-        options: ChunkOptions
-    ): Promise<DocumentChunk[]> {
-        // First, identify and separate different content types
-        const sections = this.identifyContentSections(content);
-        const allChunks: DocumentChunk[] = [];
-        
-        let globalPosition = 0;
-        
-        for (const section of sections) {
-            let sectionChunks: DocumentChunk[];
-            
-            switch (section.type) {
-                case 'code':
-                    sectionChunks = await this.chunkCode(documentId, section.content, {
-                        ...options,
-                        maxSize: Math.min(options.maxSize || 150, 150)
-                    });
-                    break;
-                case 'markdown':
-                    sectionChunks = await this.chunkMarkdown(documentId, section.content, options);
-                    break;
-                default:
-                    sectionChunks = await this.chunkText(documentId, section.content, options);
-            }
-            
-            // Adjust positions to be global
-            for (const chunk of sectionChunks) {
-                chunk.start_position += globalPosition;
-                chunk.end_position += globalPosition;
-                chunk.chunk_index = allChunks.length;
-                chunk.id = `${documentId}_chunk_${allChunks.length}`;
-                allChunks.push(chunk);
-            }
-            
-            globalPosition += section.content.length;
-        }
-        
-        return allChunks;
-    }
-
-    /**
-     * Identify different content sections in mixed content
-     */
-    private identifyContentSections(content: string): Array<{type: string, content: string}> {
-        const sections: Array<{type: string, content: string}> = [];
-        const lines = content.split('\n');
-        
-        let currentSection = { type: 'text', content: '' };
-        
-        for (const line of lines) {
-            let lineType = 'text';
-            
-            // Detect code blocks with ```
-            if (line.trim().startsWith('```')) {
-                if (currentSection.type === 'code') {
-                    // End of code block
-                    currentSection.content += line + '\n';
-                    sections.push(currentSection);
-                    currentSection = { type: 'text', content: '' };
-                    continue;
-                } else {
-                    // Start of code block
-                    if (currentSection.content.trim()) {
-                        sections.push(currentSection);
-                    }
-                    currentSection = { type: 'code', content: line + '\n' };
-                    continue;
-                }
-            }
-            
-            // Detect inline code patterns (like from PDFs)
-            const codePatterns = [
-                /^\s*(public|private|protected)\s+(class|interface|static)/,
-                /^\s*(function|def|class)\s+\w+/,
-                /^\s*import\s+/,
-                /^\s*from\s+\w+\s+import/,
-                /^\s*\w+\s*[({].*[)}]\s*[{;]/,
-                /^\s*\/\/|^\s*\/\*|^\s*\*/,  // Comments
-                /^\s*}\s*$|^\s*{\s*$/,       // Braces alone
-                /^\s+return\s+/,             // Indented return
-                /^\s+if\s*\(|^\s+for\s*\(|^\s+while\s*\(/  // Indented control structures
-            ];
-            
-            if (currentSection.type === 'code') {
-                lineType = 'code';
-            } else if (line.match(/^#{1,6}\s/) || line.match(/^\*\s/) || line.match(/^\d+\.\s/)) {
-                lineType = 'markdown';
-            } else if (codePatterns.some(pattern => pattern.test(line))) {
-                lineType = 'code';
-            }
-            
-            if (lineType !== currentSection.type && currentSection.content.trim()) {
-                sections.push(currentSection);
-                currentSection = { type: lineType, content: line + '\n' };
-            } else {
-                currentSection.content += line + '\n';
-            }
-        }
-        
-        if (currentSection.content.trim()) {
-            sections.push(currentSection);
-        }
-        
-        return sections;
-    }
-
-    /**
-     * Chunk regular text content
-     */
-    private async chunkText(
-        documentId: string, 
-        content: string, 
-        options: ChunkOptions
-    ): Promise<DocumentChunk[]> {
-        const separators = ['\n\n', '\n', '. ', ' ', ''];
-        
-        return this.recursiveChunk(documentId, content, separators, options, {
-            type: 'text',
-            original_document_type: 'text'
-        });
-    }
-
-    /**
-     * Recursive chunking with hierarchical separators (LangChain-inspired)
-     */
-    private async recursiveChunk(
         documentId: string,
         content: string,
-        separators: string[],
-        options: ChunkOptions,
-        baseMetadata: Partial<ChunkMetadata>
-    ): Promise<DocumentChunk[]> {
-        const chunks: DocumentChunk[] = [];
-        const maxSize = options.maxSize || 500;
-        const overlap = options.overlap || 50;
-        
-        if (content.length <= maxSize) {
-            // Content fits in one chunk
-            const embeddings = await this.embeddingProvider.generateEmbedding(content);
-            chunks.push({
-                id: `${documentId}_chunk_0`,
-                document_id: documentId,
-                chunk_index: 0,
-                content: content.trim(),
-                embeddings,
-                start_position: 0,
-                end_position: content.length,
-                metadata: {
-                    ...baseMetadata,
-                    chunk_size: content.length,
-                    complexity_score: this.calculateComplexity(content)
-                } as ChunkMetadata
+        options: ParentChildChunkOptions = {}
+    ): Promise<ChunkingResult> {
+        const contentType = this.detectContentType(content);
+        const opts = this.resolveOptions(contentType, options);
+
+        console.error(
+            `[IntelligentChunker] Parent-child chunking: type=${contentType}, ` +
+            `len=${content.length}, parentMax=${opts.parentMaxSize}, childMax=${opts.childMaxSize}`
+        );
+
+        // Step 1: Split document into large parent chunks
+        const internalParents = this.createParentChunks(content, contentType, opts);
+
+        // Step 2: Build ParentChunkData array for separate storage
+        const parentData: ParentChunkData[] = internalParents.map(p => ({
+            index: p.index,
+            content: p.content.trim(),
+            startPosition: p.startPosition,
+            endPosition: p.endPosition,
+            heading: p.heading,
+            contentType: p.contentType,
+        }));
+
+        // Step 3: For each parent, split into small children and generate embeddings
+        // Children only store a lightweight reference (parent_index) to their parent.
+        const allChildren: DocumentChunk[] = [];
+        let globalChildIndex = 0;
+
+        for (const parent of internalParents) {
+            const childTexts = this.createChildTexts(parent.content, contentType, opts);
+
+            let searchFrom = 0;
+            for (const childText of childTexts) {
+                const trimmed = childText.trim();
+                if (!trimmed) continue;
+
+                // Track child position within parent content
+                const posInParent = parent.content.indexOf(trimmed, searchFrom);
+                const globalStart = parent.startPosition + Math.max(0, posInParent);
+                const globalEnd = globalStart + trimmed.length;
+                if (posInParent >= 0) searchFrom = posInParent + 1;
+
+                const embeddings = await this.embeddingProvider.generateEmbedding(trimmed);
+
+                allChildren.push({
+                    id: `${documentId}_chunk_${globalChildIndex}`,
+                    document_id: documentId,
+                    chunk_index: globalChildIndex,
+                    content: trimmed,
+                    embeddings,
+                    start_position: globalStart,
+                    end_position: globalEnd,
+                    metadata: {
+                        type: parent.contentType,
+                        parent_index: parent.index,
+                        heading: parent.heading,
+                    }
+                });
+                globalChildIndex++;
+            }
+        }
+
+        console.error(
+            `[IntelligentChunker] Created ${parentData.length} parents → ${allChildren.length} children`
+        );
+        return { children: allChildren, parents: parentData };
+    }
+
+    // ─── Parent Chunk Creation ────────────────────────────────────────────
+
+    /**
+     * Split the full document into large parent chunks that preserve context.
+     * Uses high-level structural separators (headings, sections, function/class defs).
+     */
+    private createParentChunks(
+        content: string,
+        contentType: ContentType,
+        opts: ResolvedOptions
+    ): ParentChunk[] {
+        const separators = this.getParentSeparators(contentType);
+        const rawTexts = this.splitWithSeparators(content, separators, opts.parentMaxSize);
+        const headings = this.extractHeadings(content);
+
+        const parents: ParentChunk[] = [];
+        let searchPos = 0;
+
+        for (let i = 0; i < rawTexts.length; i++) {
+            const text = rawTexts[i];
+            if (!text.trim()) continue;
+
+            // Locate this segment in the original content
+            const matchSnippet = text.substring(0, Math.min(80, text.length));
+            let startPos = content.indexOf(matchSnippet, searchPos);
+            if (startPos === -1) startPos = searchPos;
+            const endPos = startPos + text.length;
+
+            const heading = this.findHeadingForPosition(headings, startPos);
+
+            // Add overlap from preceding text for context continuity
+            let parentContent = text;
+            let actualStart = startPos;
+            if (i > 0 && opts.parentOverlap > 0) {
+                const overlapStart = Math.max(0, startPos - opts.parentOverlap);
+                parentContent = content.substring(overlapStart, startPos) + parentContent;
+                actualStart = overlapStart;
+            }
+
+            parents.push({
+                index: i,
+                content: parentContent,
+                startPosition: actualStart,
+                endPosition: endPos,
+                heading,
+                contentType,
             });
+
+            searchPos = endPos;
+        }
+
+        return parents;
+    }
+
+    // ─── Child Chunk Creation ─────────────────────────────────────────────
+
+    /**
+     * Split a parent chunk into small child texts for precise search matching.
+     * Uses lower-level separators (paragraphs, lines, sentences).
+     */
+    private createChildTexts(
+        parentContent: string,
+        contentType: ContentType,
+        opts: ResolvedOptions
+    ): string[] {
+        const separators = this.getChildSeparators(contentType);
+        const rawChildren = this.splitWithSeparators(parentContent, separators, opts.childMaxSize);
+
+        if (rawChildren.length <= 1 || opts.childOverlap <= 0) return rawChildren;
+
+        // Add overlap between consecutive children for continuity
+        const withOverlap: string[] = [rawChildren[0]];
+        for (let i = 1; i < rawChildren.length; i++) {
+            const prev = rawChildren[i - 1];
+            const overlapText = prev.slice(Math.max(0, prev.length - opts.childOverlap));
+            withOverlap.push(overlapText + ' ' + rawChildren[i]);
+        }
+
+        return withOverlap;
+    }
+
+    // ─── Separator Hierarchies ────────────────────────────────────────────
+
+    /**
+     * Separators for splitting into large parent chunks.
+     * High-level structural boundaries (headings, function/class definitions).
+     */
+    private getParentSeparators(contentType: ContentType): string[] {
+        switch (contentType) {
+            case ContentType.MARKDOWN:
+                return ['\n## ', '\n### ', '\n#### ', '\n\n\n', '\n\n'];
+            case ContentType.CODE:
+                return [
+                    '\nexport class ', '\nexport function ', '\nexport async function ',
+                    '\nexport default ', '\nexport const ',
+                    '\nclass ', '\nfunction ', '\nasync function ',
+                    '\ndef ', '\nclass ',
+                    '\n\n\n', '\n\n',
+                ];
+            case ContentType.HTML:
+                return ['</section>', '</article>', '</div>', '\n\n\n', '\n\n'];
+            case ContentType.MIXED:
+                return ['\n## ', '\n### ', '\n```', '\n\n\n', '\n\n'];
+            default: // TEXT, PDF
+                return ['\n\n\n', '\n\n'];
+        }
+    }
+
+    /**
+     * Separators for splitting parents into small child chunks.
+     * Lower-level boundaries (paragraphs, lines, sentences).
+     */
+    private getChildSeparators(contentType: ContentType): string[] {
+        switch (contentType) {
+            case ContentType.MARKDOWN:
+                return ['\n\n', '\n', '. ', ' '];
+            case ContentType.CODE:
+                return ['\n\n', '\n', ' '];
+            case ContentType.HTML:
+                return ['</p>', '</li>', '\n\n', '\n', '. ', ' '];
+            default: // TEXT, PDF, MIXED
+                return ['\n\n', '\n', '. ', ' '];
+        }
+    }
+
+    // ─── Recursive Splitting ──────────────────────────────────────────────
+
+    /**
+     * Recursively split text using a hierarchy of separators.
+     * Tries the first separator; if any resulting segment is still too large,
+     * recurses with the remaining separators.
+     */
+    private splitWithSeparators(text: string, separators: string[], maxSize: number): string[] {
+        if (text.length <= maxSize) return [text];
+
+        if (separators.length === 0) {
+            // Hard split at maxSize as last resort
+            const chunks: string[] = [];
+            for (let i = 0; i < text.length; i += maxSize) {
+                chunks.push(text.substring(i, i + maxSize));
+            }
             return chunks;
         }
 
-        // Use recursive splitting
-        const splits = this.splitWithSeparators(content, separators, maxSize);
-        
-        let chunkIndex = 0;
-        let globalPosition = 0;
-        
-        for (let i = 0; i < splits.length; i++) {
-            const split = splits[i];
-            let chunkContent = split;
-            
-            // Add overlap with previous chunk
-            if (i > 0 && overlap > 0) {
-                const prevSplit = splits[i - 1];
-                const overlapText = prevSplit.slice(-overlap);
-                chunkContent = overlapText + ' ' + chunkContent;
-            }
-            
-            const embeddings = await this.embeddingProvider.generateEmbedding(chunkContent);
-            const startPos = globalPosition;
-            const endPos = globalPosition + split.length;
-            
-            chunks.push({
-                id: `${documentId}_chunk_${chunkIndex}`,
-                document_id: documentId,
-                chunk_index: chunkIndex,
-                content: chunkContent.trim(),
-                embeddings,
-                start_position: startPos,
-                end_position: endPos,
-                metadata: {
-                    ...baseMetadata,
-                    chunk_size: chunkContent.length,
-                    complexity_score: this.calculateComplexity(chunkContent),
-                    section: this.extractSection(chunkContent)
-                } as ChunkMetadata
-            });
-            
-            globalPosition = endPos;
-            chunkIndex++;
-        }
-        
-        return chunks;
-    }
-
-    /**
-     * Split text using hierarchical separators
-     */
-    private splitWithSeparators(text: string, separators: string[], maxSize: number): string[] {
-        if (separators.length === 0 || text.length <= maxSize) {
-            return [text];
-        }
-
         const separator = separators[0];
-        const remainingSeparators = separators.slice(1);
-        
-        const splits = text.split(separator);
-        const finalSplits: string[] = [];
-        
-        let currentGroup = '';
-        
-        for (const split of splits) {
-            const testGroup = currentGroup + (currentGroup ? separator : '') + split;
-            
-            if (testGroup.length <= maxSize) {
-                currentGroup = testGroup;
+        const remaining = separators.slice(1);
+        const parts = text.split(separator);
+        const result: string[] = [];
+        let current = '';
+
+        for (const part of parts) {
+            const candidate = current
+                ? current + separator + part
+                : part;
+
+            if (candidate.length <= maxSize) {
+                current = candidate;
             } else {
-                // Current group is ready to be added
-                if (currentGroup) {
-                    if (currentGroup.length > maxSize) {
-                        // Need to split further
-                        const subSplits = this.splitWithSeparators(currentGroup, remainingSeparators, maxSize);
-                        finalSplits.push(...subSplits);
+                if (current) {
+                    if (current.length > maxSize) {
+                        result.push(...this.splitWithSeparators(current, remaining, maxSize));
                     } else {
-                        finalSplits.push(currentGroup);
+                        result.push(current);
                     }
                 }
-                
-                // Start new group with current split
-                currentGroup = split;
-                if (currentGroup.length > maxSize) {
-                    // Current split itself is too large
-                    const subSplits = this.splitWithSeparators(currentGroup, remainingSeparators, maxSize);
-                    finalSplits.push(...subSplits);
-                    currentGroup = '';
+                if (part.length > maxSize) {
+                    result.push(...this.splitWithSeparators(part, remaining, maxSize));
+                    current = '';
+                } else {
+                    current = part;
                 }
             }
         }
-        
-        if (currentGroup) {
-            if (currentGroup.length > maxSize) {
-                const subSplits = this.splitWithSeparators(currentGroup, remainingSeparators, maxSize);
-                finalSplits.push(...subSplits);
+
+        if (current) {
+            if (current.length > maxSize) {
+                result.push(...this.splitWithSeparators(current, remaining, maxSize));
             } else {
-                finalSplits.push(currentGroup);
+                result.push(current);
             }
         }
-        
-        return finalSplits.filter(s => s.trim().length > 0);
+
+        return result.filter(s => s.trim().length > 0);
     }
 
+    // ─── Content Type Detection ───────────────────────────────────────────
+
     /**
-     * Apply semantic refinement using embeddings similarity
+     * Detect content type to choose optimal separator hierarchies and sizes.
      */
-    private async applySemanticRefinement(
-        chunks: DocumentChunk[], 
-        options: ChunkOptions
-    ): Promise<DocumentChunk[]> {
-        if (chunks.length < 2) return chunks;
-        
-        console.error(`[IntelligentChunker] Applying semantic refinement to ${chunks.length} chunks`);
-        
-        const refinedChunks: DocumentChunk[] = [];
-        let currentChunk = chunks[0];
-        
-        for (let i = 1; i < chunks.length; i++) {
-            const nextChunk = chunks[i];
-            
-            // Calculate semantic similarity between chunks
-            const similarity = this.calculateSimilarity(
-                currentChunk.embeddings || [],
-                nextChunk.embeddings || []
-            );
-            
-            // If chunks are very similar and combined size is reasonable, merge them
-            if (similarity > 0.8 && 
-                (currentChunk.content.length + nextChunk.content.length) <= (options.maxSize || 500) * 1.5) {
-                
-                // Merge chunks
-                const mergedContent = currentChunk.content + '\n' + nextChunk.content;
-                const mergedEmbeddings = await this.embeddingProvider.generateEmbedding(mergedContent);
-                
-                currentChunk = {
-                    ...currentChunk,
-                    content: mergedContent,
-                    embeddings: mergedEmbeddings,
-                    end_position: nextChunk.end_position,
-                    metadata: {
-                        ...currentChunk.metadata,
-                        chunk_size: mergedContent.length,
-                        semantic_topic: 'merged'
-                    }
-                };
-            } else {
-                // Keep current chunk and move to next
-                refinedChunks.push(currentChunk);
-                currentChunk = nextChunk;
-            }
+    detectContentType(content: string): ContentType {
+        const codePatterns = [
+            /^import\s+/m, /^from\s+\w+\s+import/m,
+            /^\s*def\s+\w+/m, /^\s*function\s+\w+/m,
+            /^\s*class\s+\w+/m, /^\s*public\s+class/m,
+            /^\s*interface\s+\w+/m, /^\s*export\s+(class|function|interface)/m,
+            /^\s*if\s*\(/m, /^\s*for\s*\(/m, /^\s*while\s*\(/m,
+        ];
+        const markdownPatterns = [
+            /^#{1,6}\s+/m, /^\*\s+/m, /^\d+\.\s+/m,
+            /\[.*\]\(.*\)/, /```[\s\S]*?```/, /^\|.*\|.*\|/m, /^>\s+/m,
+        ];
+        const htmlPatterns = [
+            /<html/i, /<body/i, /<div/i, /<p>/i,
+            /<h[1-6]>/i, /<script/i, /<style/i,
+        ];
+
+        const codeScore = codePatterns.reduce((s, p) => s + (p.test(content) ? 1 : 0), 0);
+        const mdScore = markdownPatterns.reduce((s, p) => s + (p.test(content) ? 1 : 0), 0);
+        const htmlScore = htmlPatterns.reduce((s, p) => s + (p.test(content) ? 1 : 0), 0);
+
+        // Mixed content has signals from multiple types
+        if ((codeScore > 0 && mdScore > 0) || (codeScore > 0 && htmlScore > 0) ||
+            (mdScore > 0 && htmlScore > 0)) {
+            return ContentType.MIXED;
         }
-        
-        refinedChunks.push(currentChunk);
-        
-        // Re-index chunks
-        refinedChunks.forEach((chunk, index) => {
-            chunk.chunk_index = index;
-            chunk.id = `${chunk.document_id}_chunk_${index}`;
-        });
-        
-        console.error(`[IntelligentChunker] Refined to ${refinedChunks.length} chunks`);
-        return refinedChunks;
+        if (htmlScore >= 2) return ContentType.HTML;
+        if (mdScore >= 2) return ContentType.MARKDOWN;
+        if (codeScore >= 2) return ContentType.CODE;
+
+        return ContentType.TEXT;
     }
 
+    // ─── Options Resolution ───────────────────────────────────────────────
+
     /**
-     * Enrich chunks with contextual information
+     * Resolve optimal parent/child chunk sizes based on content type.
+     * User-provided options override defaults.
      */
-    private async enrichWithContext(chunks: DocumentChunk[], originalContent: string): Promise<DocumentChunk[]> {
-        const headings = this.extractHeadings(originalContent);
-        
-        for (const chunk of chunks) {
-            // Find the most relevant heading for this chunk
-            const relevantHeading = this.findRelevantHeading(chunk, headings);
-            if (relevantHeading) {
-                if (!chunk.metadata) {
-                    chunk.metadata = {};
-                }
-                chunk.metadata.heading = relevantHeading;
-                chunk.metadata.section = relevantHeading;
-            }
-            
-            // Add surrounding context (simplified)
-            const chunkIndex = chunk.chunk_index;
-            if (chunkIndex > 0 && chunkIndex < chunks.length - 1) {
-                if (!chunk.metadata) {
-                    chunk.metadata = {};
-                }
-                const prevContent = chunks[chunkIndex - 1].content.substring(0, 100);
-                const nextContent = chunks[chunkIndex + 1].content.substring(0, 100);
-                chunk.metadata.surrounding_context = `Previous: ${prevContent}... Next: ${nextContent}...`;
-            }
+    private resolveOptions(contentType: ContentType, userOpts: ParentChildChunkOptions): ResolvedOptions {
+        const defaults: Record<ContentType, ResolvedOptions> = {
+            [ContentType.TEXT]: {
+                parentMaxSize: 5800,
+                childMaxSize: 1000,
+                childOverlap: 50,
+                parentOverlap: 0,
+            },
+            [ContentType.MARKDOWN]: {
+                parentMaxSize: 7800,
+                childMaxSize: 1400,
+                childOverlap: 60,
+                parentOverlap: 0,
+            },
+            [ContentType.CODE]: {
+                parentMaxSize: 3000,
+                childMaxSize: 600,
+                childOverlap: 40,
+                parentOverlap: 0,
+            },
+            [ContentType.HTML]: {
+                parentMaxSize: 5800,
+                childMaxSize: 1000,
+                childOverlap: 50,
+                parentOverlap: 0,
+            },
+            [ContentType.PDF]: {
+                parentMaxSize: 5800,
+                childMaxSize: 1200,
+                childOverlap: 60,
+                parentOverlap: 0,
+            },
+            [ContentType.MIXED]: {
+                parentMaxSize: 4600,
+                childMaxSize: 1000,
+                childOverlap: 50,
+                parentOverlap: 0,
+            },
+        };
+
+        return { ...defaults[contentType], ...userOpts } as ResolvedOptions;
+    }
+
+    // ─── Heading Utilities ────────────────────────────────────────────────
+
+    /**
+     * Extract all headings (markdown + HTML) with their positions.
+     */
+    private extractHeadings(content: string): Array<{ text: string; position: number }> {
+        const headings: Array<{ text: string; position: number }> = [];
+
+        for (const match of content.matchAll(/^(#{1,6})\s+(.+)$/gm)) {
+            headings.push({ text: match[2].trim(), position: match.index || 0 });
         }
-        
-        return chunks;
-    }
-
-    /**
-     * Calculate text complexity score
-     */
-    private calculateComplexity(text: string): number {
-        const words = text.split(/\s+/).filter(w => w.length > 0);
-        const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
-        const uniqueWords = new Set(words.map(w => w.toLowerCase()));
-        
-        if (words.length === 0) return 0;
-        
-        const avgWordsPerSentence = words.length / Math.max(sentences.length, 1);
-        const lexicalDiversity = uniqueWords.size / words.length;
-        const hasCode = /[{}();]/.test(text) ? 0.3 : 0;
-        
-        // Normalize to 0-1 scale
-        return Math.min(1, (avgWordsPerSentence / 20) * 0.5 + lexicalDiversity * 0.5 + hasCode);
-    }
-
-    /**
-     * Calculate cosine similarity between two embedding vectors
-     */
-    private calculateSimilarity(a: number[], b: number[]): number {
-        if (a.length !== b.length || a.length === 0) return 0;
-        
-        let dotProduct = 0;
-        let normA = 0;
-        let normB = 0;
-        
-        for (let i = 0; i < a.length; i++) {
-            dotProduct += a[i] * b[i];
-            normA += a[i] * a[i];
-            normB += b[i] * b[i];
-        }
-        
-        const norm = Math.sqrt(normA) * Math.sqrt(normB);
-        return norm === 0 ? 0 : dotProduct / norm;
-    }
-
-    /**
-     * Extract headings from content
-     */
-    private extractHeadings(content: string): Array<{level: number, text: string, position: number}> {
-        const headings: Array<{level: number, text: string, position: number}> = [];
-        
-        // Markdown headings
-        const markdownHeadings = content.matchAll(/^(#{1,6})\s+(.+)$/gm);
-        for (const match of markdownHeadings) {
+        for (const match of content.matchAll(/<h([1-6]).*?>(.*?)<\/h[1-6]>/gi)) {
             headings.push({
-                level: match[1].length,
-                text: match[2].trim(),
-                position: match.index || 0
-            });
-        }
-        
-        // HTML headings
-        const htmlHeadings = content.matchAll(/<h([1-6]).*?>(.*?)<\/h[1-6]>/gi);
-        for (const match of htmlHeadings) {
-            headings.push({
-                level: parseInt(match[1]),
                 text: match[2].replace(/<[^>]*>/g, '').trim(),
-                position: match.index || 0
+                position: match.index || 0,
             });
         }
-        
+
         return headings.sort((a, b) => a.position - b.position);
     }
 
     /**
-     * Find the most relevant heading for a chunk
+     * Find the most recent heading that appears before a given position.
      */
-    private findRelevantHeading(
-        chunk: DocumentChunk, 
-        headings: Array<{level: number, text: string, position: number}>
+    private findHeadingForPosition(
+        headings: Array<{ text: string; position: number }>,
+        position: number
     ): string | undefined {
-        // Find the heading that appears before this chunk's position
-        let relevantHeading: string | undefined;
-        
-        for (const heading of headings) {
-            if (heading.position <= chunk.start_position) {
-                relevantHeading = heading.text;
-            } else {
-                break;
-            }
+        let heading: string | undefined;
+        for (const h of headings) {
+            if (h.position <= position) heading = h.text;
+            else break;
         }
-        
-        return relevantHeading;
-    }
-
-    /**
-     * Extract section information from chunk content
-     */
-    private extractSection(content: string): string | undefined {
-        // Look for markdown headers
-        const headerMatch = content.match(/^(#{1,6})\s+(.+)$/m);
-        if (headerMatch) {
-            return headerMatch[2].trim();
-        }
-        
-        // Look for HTML headers
-        const htmlHeaderMatch = content.match(/<h[1-6].*?>(.*?)<\/h[1-6]>/i);
-        if (htmlHeaderMatch) {
-            return htmlHeaderMatch[1].replace(/<[^>]*>/g, '').trim();
-        }
-        
-        return undefined;
+        return heading;
     }
 }

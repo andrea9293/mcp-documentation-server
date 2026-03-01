@@ -6,11 +6,13 @@ import { z } from "zod";
 import { createLazyEmbeddingProvider } from './embedding-provider.js';
 import { DocumentManager } from './document-manager.js';
 import { GeminiSearchService } from './gemini-search-service.js';
+import { startWebServer } from './web-server.js';
+import { deduplicateSearchResults, formatDocumentList } from './search-utils.js';
 
 // Initialize server
 const server = new FastMCP({
     name: "Documentation Server",
-    version: "1.0.0",
+    version: "2.0.0",
 });
 
 // Initialize with default embedding provider
@@ -53,164 +55,6 @@ server.addTool({
     },
 });
 
-// Search documents tool
-server.addTool({
-    name: "search_documents",
-    description: "Search for chunks within a specific document using semantic similarity. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
-    parameters: z.object({
-        document_id: z.string().describe("The ID of the document to search within"),
-        query: z.string().describe("The search query"),
-        limit: z.number().optional().default(10).describe("Maximum number of chunk results to return"),
-    }), execute: async (args) => {
-        try {
-            const manager = await initializeDocumentManager();
-            // Controllo se il documento esiste prima di cercare
-            const document = await manager.getDocument(args.document_id);
-            if (!document) {
-                throw new Error(`Document with ID '${args.document_id}' Not found. Use 'list_documents' to get all id of documents.`);
-            }
-            const results = await manager.searchDocuments(args.document_id, args.query, args.limit);
-
-            if (results.length === 0) {
-                return "No chunks found matching your query in the specified document.";
-            }
-
-            const searchResults = results.map(result => ({
-                // chunk_id: result.chunk.id,
-                document_id: result.chunk.document_id,
-                chunk_index: result.chunk.chunk_index,
-                score: result.score,
-                content: result.chunk.content,
-                // start_position: result.chunk.start_position,
-                // end_position: result.chunk.end_position,
-            }));
-            const res = {
-                hint_for_llm: "After identifying the relevant chunks, use the get_context_window tool to retrieve additional context around each chunk of interest. You can call get_context_window multiple times until you have gathered enough context to answer the question.",
-                results: searchResults,
-            }
-            return JSON.stringify(res, null, 2);
-        } catch (error) {
-            throw new Error(`Search failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    },
-});
-
-// Get document tool
-server.addTool({
-    name: "get_document",
-    description: "Retrieve a specific document by ID. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
-    parameters: z.object({
-        id: z.string().describe("The document ID"),
-    }), execute: async (args) => {
-        try {
-            const manager = await initializeDocumentManager();
-            const document = await manager.getOnlyContentDocument(args.id);
-
-            if (!document) {
-                return `Document with ID ${args.id} not found.`;
-            }
-
-            return JSON.stringify(document, null, 2);
-        } catch (error) {
-            throw new Error(`Failed to retrieve document: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    },
-});
-
-// List documents tool
-server.addTool({
-    name: "list_documents",
-    description: "List all documents in the knowledge base",
-    parameters: z.object({}), execute: async () => {
-        try {
-            const manager = await initializeDocumentManager();
-            const documents = await manager.getAllDocuments();
-
-            const documentList = documents.map(doc => ({
-                id: doc.id,
-                title: doc.title,
-                created_at: doc.created_at,
-                updated_at: doc.updated_at,
-                metadata: doc.metadata,
-                content_preview: doc.content.substring(0, 700) + "...",
-                chunks_count: doc.chunks.length,
-            }));
-
-            return JSON.stringify(documentList, null, 2);
-        } catch (error) {
-            throw new Error(`Failed to list documents: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    },
-});
-
-// Get uploads folder path tool
-server.addTool({
-    name: "get_uploads_path",
-    description: "Get the absolute path to the uploads folder where you can manually place .txt and .md files",
-    parameters: z.object({}),
-    execute: async () => {
-        try {
-            const manager = await initializeDocumentManager();
-            const uploadsPath = manager.getUploadsPath();
-            return `Uploads folder path: ${uploadsPath}\n\nYou can place .txt and .md files in this folder, then use the 'process_uploads' tool to create embeddings for them.`;
-        } catch (error) {
-            throw new Error(`Failed to get uploads path: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    },
-});
-
-// Process uploads folder tool
-server.addTool({
-    name: "process_uploads",
-    description: "Process all .txt and .md files in the uploads folder and create embeddings for them",
-    parameters: z.object({}), execute: async () => {
-        try {
-            const manager = await initializeDocumentManager();
-            const result = await manager.processUploadsFolder();
-
-            let message = `Processing completed!\n`;
-            message += `- Files processed: ${result.processed}\n`;
-
-            if (result.errors.length > 0) {
-                message += `- Errors encountered: ${result.errors.length}\n`;
-                message += `\nErrors:\n${result.errors.map(err => `  • ${err}`).join('\n')}`;
-            }
-
-            return message;
-        } catch (error) {
-            throw new Error(`Failed to process uploads: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    },
-});
-
-// List uploads files tool
-server.addTool({
-    name: "list_uploads_files",
-    description: "List all files in the uploads folder with their details",
-    parameters: z.object({}), execute: async () => {
-        try {
-            const manager = await initializeDocumentManager();
-            const files = await manager.listUploadsFiles();
-
-            if (files.length === 0) {
-                return "No files found in the uploads folder.";
-            }
-
-            const fileList = files.map(file => ({
-                name: file.name,
-                size_bytes: file.size,
-                modified: file.modified,
-                supported: file.supported,
-                status: file.supported ? "Can be processed" : "Unsupported format"
-            }));
-
-            return JSON.stringify(fileList, null, 2);
-        } catch (error) {
-            throw new Error(`Failed to list uploads files: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    },
-});
-
 // Delete document tool
 server.addTool({
     name: "delete_document",
@@ -242,44 +86,127 @@ server.addTool({
     },
 });
 
+// Search documents tool
+server.addTool({
+    name: "search_documents",
+    description: "Search for chunks within a specific document using semantic similarity. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
+    parameters: z.object({
+        document_id: z.string().describe("The ID of the document to search within"),
+        query: z.string().describe("The search query"),
+        limit: z.number().optional().default(10).describe("Maximum number of chunk results to return"),
+    }), execute: async (args) => {
+        try {
+            const manager = await initializeDocumentManager();
+            // Controllo se il documento esiste prima di cercare
+            const document = await manager.getDocument(args.document_id);
+            if (!document) {
+                throw new Error(`Document with ID '${args.document_id}' Not found. Use 'list_documents' to get all id of documents.`);
+            }
+            const results = await manager.searchDocuments(args.document_id, args.query, args.limit);
+
+            if (results.length === 0) {
+                return "No chunks found matching your query in the specified document.";
+            }
+
+            const searchResults = await deduplicateSearchResults(results, manager);
+
+            const res = {
+                hint_for_llm: "Results return parent-level content sections. Use get_context_window with document_id and parent_index to navigate surrounding parent sections.",
+                results: searchResults,
+            }
+            return JSON.stringify(res, null, 2);
+        } catch (error) {
+            throw new Error(`Search failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    },
+});
+
+// Get document tool
+server.addTool({
+    name: "get_document",
+    description: "Use this tool only when user explicitly requests it. Retrieve a specific document by ID. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
+    parameters: z.object({
+        id: z.string().describe("The document ID"),
+    }), execute: async (args) => {
+        try {
+            const manager = await initializeDocumentManager();
+            const document = await manager.getOnlyContentDocument(args.id);
+
+            if (!document) {
+                return `Document with ID ${args.id} not found.`;
+            }
+
+            return JSON.stringify(document, null, 2);
+        } catch (error) {
+            throw new Error(`Failed to retrieve document: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    },
+});
+
+// List documents tool
+server.addTool({
+    name: "list_documents",
+    description: "List all documents in the knowledge base",
+    parameters: z.object({}), execute: async () => {
+        try {
+            const manager = await initializeDocumentManager();
+            const documents = await manager.getAllDocuments();
+
+            const documentList = formatDocumentList(documents);
+
+            return JSON.stringify(documentList, null, 2);
+        } catch (error) {
+            throw new Error(`Failed to list documents: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    },
+});
+
+// Search across all documents tool
+server.addTool({
+    name: "search_all_documents",
+    description: "Search for relevant chunks across ALL documents in the knowledge base using semantic similarity (hybrid: full-text + vector). Useful for cross-document search when you don't know which document contains the answer.",
+    parameters: z.object({
+        query: z.string().describe("The search query"),
+        limit: z.number().optional().default(10).describe("Maximum number of chunk results to return"),
+    }), execute: async (args) => {
+        try {
+            const manager = await initializeDocumentManager();
+            const results = await manager.searchAllDocuments(args.query, args.limit);
+
+            if (results.length === 0) {
+                return "No chunks found matching your query across all documents.";
+            }
+
+            const searchResults = await deduplicateSearchResults(results, manager);
+
+            const res = {
+                hint_for_llm: "Results return parent-level content sections. Use get_context_window with document_id and parent_index to navigate surrounding parent sections.",
+                results: searchResults,
+            };
+            return JSON.stringify(res, null, 2);
+        } catch (error) {
+            throw new Error(`Cross-document search failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    },
+});
 
 // MCP tool: get_context_window
 server.addTool({
     name: "get_context_window",
-    description: "Returns a window of chunks around a central chunk given document_id, chunk_index, before, after. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
+    description: "Returns a window of parent content sections around a central parent_index. Use parent_index values from search results. Always tell the user if result is truncated because of length.",
     parameters: z.object({
         document_id: z.string().describe("The document ID"),
-        chunk_index: z.number().describe("The index of the central chunk"),
-        before: z.number().default(1).describe("Number of previous chunks to include"),
-        after: z.number().default(1).describe("Number of next chunks to include")
+        parent_index: z.number().describe("The parent_index of the central section (from search results)"),
+        before: z.number().default(1).describe("Number of previous parent sections to include"),
+        after: z.number().default(1).describe("Number of next parent sections to include")
     }),
-    async execute({ document_id, chunk_index, before, after }) {
+    async execute({ document_id, parent_index, before, after }) {
         const manager = await initializeDocumentManager();
-        const document = await manager.getDocument(document_id);
-        if (!document || !document.chunks || !Array.isArray(document.chunks)) {
-            throw new Error("Document or chunk not found");
+        const result = await manager.getParentWindow(document_id, parent_index, before, after);
+        if (!result) {
+            throw new Error("Document not found or no parent sections available");
         }
-        const total = document.chunks.length;
-        let windowChunks;
-        let range;
-        
-        const start = Math.max(0, chunk_index - before);
-        const end = Math.min(total, chunk_index + after + 1);
-        windowChunks = document.chunks.slice(start, end).map(chunk => ({
-            chunk_index: chunk.chunk_index,
-            content: chunk.content,
-            // start_position: chunk.start_position,
-            // end_position: chunk.end_position,
-            // type: chunk.metadata?.type || null
-        }));
-        range = [start, end - 1];
-        
-        return JSON.stringify({
-            window: windowChunks,
-            center: chunk_index,
-            // range,
-            total_chunks: total
-        }, null, 2);
+        return JSON.stringify(result, null, 2);
     }
 });
 
@@ -390,6 +317,106 @@ if (process.env.GEMINI_API_KEY) {
 // });
 
 // Start the server
+// Optionally start web UI alongside MCP server, sharing the same DocumentManager
+if (process.env.START_WEB_UI !== 'false') {
+    initializeDocumentManager().then(manager => {
+        return startWebServer(undefined, manager);
+    }).then(() => {
+        console.error('[Server] Web UI started (port=' + (process.env.WEB_PORT || '3080') + ')');
+    }).catch(err => {
+        console.error('[Server] Failed to start Web UI:', err instanceof Error ? err.message : String(err));
+    });
+
+    server.addTool({
+        name: "get_ui_url",
+        description: "Get the URL of the web UI. use this tool when user ask you to access the web interface, when the user ask you to upload a file or when the user ask you the uploads folder path. All these function are available in the web UI.",
+        parameters: z.object({}),
+        execute: async () => {
+            try {
+                
+                let PORT = process.env.WEB_PORT || '3080';                
+                return `Web UI URL: http://localhost:${PORT}\n\nYou can access the web interface using this URL.`;
+            } catch (error) {
+                throw new Error(`Failed to get web UI URL: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        },
+    });
+}
+
+
+// if (process.env.START_WEB_UI !== undefined && process.env.START_WEB_UI !== 'true') {
+
+    // Get uploads folder path tool
+    server.addTool({
+        name: "get_uploads_path",
+        description: "Get the absolute path to the uploads folder where you can manually place .txt and .md files",
+        parameters: z.object({}),
+        execute: async () => {
+            try {
+                const manager = await initializeDocumentManager();
+                const uploadsPath = manager.getUploadsPath();
+                return `Uploads folder path: ${uploadsPath}\n\nYou can place .txt and .md files in this folder, then use the 'process_uploads' tool to create embeddings for them.`;
+            } catch (error) {
+                throw new Error(`Failed to get uploads path: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        },
+    });
+    
+    // Process uploads folder tool
+    server.addTool({
+        name: "process_uploads",
+        description: "Process all .txt and .md files in the uploads folder and create embeddings for them",
+        parameters: z.object({}), execute: async () => {
+            try {
+                const manager = await initializeDocumentManager();
+                const result = await manager.processUploadsFolder();
+    
+                let message = `Processing completed!\n`;
+                message += `- Files processed: ${result.processed}\n`;
+    
+                if (result.errors.length > 0) {
+                    message += `- Errors encountered: ${result.errors.length}\n`;
+                    message += `\nErrors:\n${result.errors.map(err => `  • ${err}`).join('\n')}`;
+                }
+    
+                return message;
+            } catch (error) {
+                throw new Error(`Failed to process uploads: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        },
+    });
+    
+    // List uploads files tool
+    server.addTool({
+        name: "list_uploads_files",
+        description: "List all files in the uploads folder with their details",
+        parameters: z.object({}), execute: async () => {
+            try {
+                const manager = await initializeDocumentManager();
+                const files = await manager.listUploadsFiles();
+    
+                if (files.length === 0) {
+                    return "No files found in the uploads folder.";
+                }
+    
+                const fileList = files.map(file => ({
+                    name: file.name,
+                    size_bytes: file.size,
+                    modified: file.modified,
+                    supported: file.supported,
+                    status: file.supported ? "Can be processed" : "Unsupported format"
+                }));
+    
+                return JSON.stringify(fileList, null, 2);
+            } catch (error) {
+                throw new Error(`Failed to list uploads files: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        },
+    });
+    
+// }
+
+
 server.start({
     transportType: "stdio",
 });

@@ -1,28 +1,26 @@
 import { existsSync, mkdirSync } from "fs";
 import { writeFile, readFile, copyFile, readdir, unlink } from "fs/promises";
 import * as path from "path";
-import { glob } from "glob";
 import { createHash } from 'crypto';
 import { Document, DocumentChunk, SearchResult, EmbeddingProvider } from './types.js';
 import { SimpleEmbeddingProvider } from './embedding-provider.js';
 import { IntelligentChunker } from './intelligent-chunker.js';
 import { extractText } from 'unpdf';
 import { getDefaultDataDir } from './utils.js';
-import { DocumentIndex } from './indexing/document-index.js';
+import { OramaStore } from './orama-store.js';
 import { GeminiFileMappingService } from './gemini-file-mapping-service.js';
 
 /**
- * Document manager that handles document operations with chunking, indexing, and embeddings
+ * Document manager that handles document operations with chunking and Orama vector DB
  */
 export class DocumentManager {
     private dataDir: string;
     private uploadsDir: string;
     private embeddingProvider: EmbeddingProvider;
     private intelligentChunker: IntelligentChunker;
-    private documentIndex: DocumentIndex | null = null;
-    private useIndexing: boolean;
-    private useParallelProcessing: boolean;
+    private oramaStore: OramaStore;
     private useStreaming: boolean;
+    private oramaInitialized = false;
     
     constructor(embeddingProvider?: EmbeddingProvider) {
         // Always use default paths
@@ -34,34 +32,28 @@ export class DocumentManager {
         this.intelligentChunker = new IntelligentChunker(this.embeddingProvider);
         
         // Feature flags with fallback
-        this.useIndexing = process.env.MCP_INDEXING_ENABLED !== 'false';
-        this.useParallelProcessing = process.env.MCP_PARALLEL_ENABLED !== 'false';
         this.useStreaming = process.env.MCP_STREAMING_ENABLED !== 'false';
+
+        // Create OramaStore with embedding dimensions
+        this.oramaStore = new OramaStore(this.embeddingProvider.getDimensions());
+        console.error(`[DocumentManager] Constructed with embeddingModel=${this.embeddingProvider.getModelName()} vectorDimensions=${this.embeddingProvider.getDimensions()}`);
         
         this.ensureDataDir();
         this.ensureUploadsDir();
         
         // Initialize Gemini file mapping service
         GeminiFileMappingService.initialize(this.dataDir);
-        
-        // Initialize indexing with error handling
-        if (this.useIndexing) {
-            try {
-                this.documentIndex = new DocumentIndex(this.dataDir);
-                console.error('[DocumentManager] Indexing enabled');
-            } catch (error) {
-                console.warn('[DocumentManager] Indexing disabled due to error:', error);
-                this.useIndexing = false;
-            }
-        }
     }
 
     /**
-     * Initialize the document index (lazy initialization)
+     * Ensure OramaStore is initialized (lazy init)
      */
-    private async ensureIndexInitialized(): Promise<void> {
-        if (this.documentIndex && this.useIndexing) {
-            await this.documentIndex.initialize(this.dataDir);
+    private async ensureOramaInitialized(): Promise<void> {
+        if (!this.oramaInitialized) {
+            console.error('[DocumentManager] Initializing OramaStore...');
+            await this.oramaStore.initialize();
+            this.oramaInitialized = true;
+            console.error('[DocumentManager] OramaStore initialized');
         }
     }
 
@@ -90,90 +82,54 @@ export class DocumentManager {
         return path.resolve(this.uploadsDir);
     }
 
-    private getDocumentPath(id: string): string {
-        return path.join(this.dataDir, `${id}.json`);
-    }
-
     private getDocumentMdPath(id: string): string {
         return path.join(this.dataDir, `${id}.md`);
     }
 
     async addDocument(title: string, content: string, metadata: Record<string, any> = {}): Promise<Document> {
-        // Check for duplicate content if indexing is enabled
-        if (this.useIndexing && this.documentIndex) {
-            await this.ensureIndexInitialized();
-            const duplicateId = this.documentIndex.findDuplicateContent(content);
-            if (duplicateId) {
-                console.warn(`[DocumentManager] Duplicate content detected, existing document: ${duplicateId}`);
-                // Optionally, you might want to return the existing document or throw an error
-                // For now, we'll continue with creating a new document
-            }
-        }
+        await this.ensureOramaInitialized();
 
         const id = this.generateId(content);
         const now = new Date().toISOString();
 
-        // Create chunks using intelligent chunker
-        const chunks = await this.intelligentChunker.createChunks(id, content, {
-            maxSize: 500,
-            overlap: 75,
-            adaptiveSize: true,
-            addContext: true
-        });
+        console.error(`[DocumentManager] Adding document id=${id} title=${title}`);
+
+        // Create chunks using parent-child chunking pattern
+        // Returns children (small, embedded) and parents (large, context-preserving)
+        const { children, parents } = await this.intelligentChunker.createChunks(id, content);
 
         const document: Document = {
             id,
             title,
             content,
             metadata,
-            chunks,
+            chunks: children,
             created_at: now,
             updated_at: now,
         };
 
-        const filePath = this.getDocumentPath(id);
-        await writeFile(filePath, JSON.stringify(document, null, 2));
+        // Store document + children in Orama
+        await this.oramaStore.addDocument(document);
+        console.error(`[DocumentManager] Stored document in Orama: ${id}`);
+
+        // Store parent chunks in separate parents DB
+        if (parents.length > 0) {
+            await this.oramaStore.addParents(id, parents);
+            console.error(`[DocumentManager] Stored ${parents.length} parent chunks for: ${id}`);
+        }
 
         // Create markdown file with the document content
         const mdFilePath = this.getDocumentMdPath(id);
         const mdContent = `# ${title}\n\n${content}`;
         await writeFile(mdFilePath, mdContent, 'utf-8');
 
-        // Add to index if enabled
-        if (this.useIndexing && this.documentIndex) {
-            this.documentIndex.addDocument(id, filePath, content, chunks);
-        }
-
         return document;
     }
 
     async getDocument(id: string): Promise<Document | null> {
-        if (this.useIndexing && this.documentIndex) {
-            await this.ensureIndexInitialized();
-            
-            // Use index for O(1) lookup
-            const filePath = this.documentIndex.findDocument(id);
-            if (!filePath) {
-                return null;
-            }
-            
-            try {
-                const data = await readFile(filePath, 'utf-8');
-                return JSON.parse(data);
-            } catch {
-                // File might have been deleted, remove from index
-                this.documentIndex.removeDocument(id);
-                return null;
-            }
-        }
-        
-        // Fallback to original method
-        try {
-            const data = await readFile(this.getDocumentPath(id), 'utf-8');
-            return JSON.parse(data);
-        } catch {
-            return null;
-        }
+        await this.ensureOramaInitialized();
+        console.error(`[DocumentManager] getDocument id=${id}`);
+        return this.oramaStore.getDocument(id);
     }
     
     async getOnlyContentDocument(id: string): Promise<string | null> {
@@ -182,78 +138,66 @@ export class DocumentManager {
     }
 
     async getAllDocuments(): Promise<Document[]> {
-        if (this.useIndexing && this.documentIndex) {
-            await this.ensureIndexInitialized();
-            
-            // Use index for faster lookup
-            const documentIds = this.documentIndex.getAllDocumentIds();
-            const documents: Document[] = [];
-            
-            for (const id of documentIds) {
-                const document = await this.getDocument(id);
-                if (document) {
-                    documents.push(document);
-                }
-            }
-            
-            return documents;
-        }
-        
-        // Fallback to original method
-        // Use forward slashes for glob pattern to work on all platforms
-        const globPattern = this.dataDir.replace(/\\/g, '/') + "/*.json";
-        const files = await glob(globPattern);
-        const documents: Document[] = [];
-
-        for (const file of files) {
-            try {
-                const data = await readFile(file, 'utf-8');
-                const document = JSON.parse(data);
-                if (document.id) { // Only include valid documents
-                    documents.push(document);
-                }
-            } catch {
-                // Skip invalid files
-            }
-        }
-
-        return documents;
+        await this.ensureOramaInitialized();
+        console.error('[DocumentManager] getAllDocuments');
+        return this.oramaStore.getAllDocuments();
     }
 
     async searchDocuments(documentId: string, query: string, limit = 10): Promise<SearchResult[]> {
+        await this.ensureOramaInitialized();
+        console.error(`[DocumentManager] searchDocuments documentId=${documentId} query="${query}" limit=${limit}`);
         const queryEmbedding = await this.embeddingProvider.generateEmbedding(query);
-        const document = await this.getDocument(documentId);
-
-        if (!document) {
-            return [];
-        }
-
-        const results: SearchResult[] = document.chunks
-            .filter(chunk => chunk.embeddings && chunk.embeddings.length > 0)
-            .map(chunk => ({
-                chunk,
-                score: this.cosineSimilarity(queryEmbedding, chunk.embeddings!)
-            }))
-            .sort((a, b) => b.score - a.score)
-            .slice(0, limit);
-
-        return results;
+        return this.oramaStore.searchChunks(queryEmbedding, limit, documentId, query);
     }
 
-    private cosineSimilarity(a: number[], b: number[]): number {
-        if (a.length !== b.length) return 0;
+    /**
+     * Get parent chunk content by document_id and parent_index.
+     * Returns null if the parent is not found (legacy documents pre-parent-child chunking).
+     */
+    async getParentContent(documentId: string, parentIndex: number): Promise<string | null> {
+        await this.ensureOramaInitialized();
+        const parent = await this.oramaStore.getParentChunk(documentId, parentIndex);
+        return parent ? parent.content : null;
+    }
 
-        let dotProduct = 0;
-        let normA = 0;
-        let normB = 0;
-
-        for (let i = 0; i < a.length; i++) {
-            dotProduct += a[i] * b[i];
-            normA += a[i] * a[i];
-            normB += b[i] * b[i];
+    /**
+     * Get a window of parent chunks around a central parent_index.
+     * Returns parent-level content for context window navigation.
+     */
+    async getParentWindow(documentId: string, parentIndex: number, before: number, after: number) {
+        await this.ensureOramaInitialized();
+        const allParents = await this.oramaStore.getParentChunksForDocument(documentId);
+        if (allParents.length === 0) {
+            return null;
         }
+        const total = allParents.length;
+        // Find the position of the requested parent_index in the sorted array
+        const centerPos = allParents.findIndex(p => p.parent_index === parentIndex);
+        if (centerPos === -1) {
+            throw new Error(`Parent index ${parentIndex} not found for document ${documentId}`);
+        }
+        const start = Math.max(0, centerPos - before);
+        const end = Math.min(total, centerPos + after + 1);
+        const windowParents = allParents.slice(start, end).map(p => ({
+            parent_index: p.parent_index,
+            content: p.content,
+            heading: p.heading || undefined,
+        }));
+        return {
+            window: windowParents,
+            center: parentIndex,
+            total_parents: total,
+        };
+    }
 
-        return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    /**
+     * Search across all documents (cross-document semantic search)
+     */
+    async searchAllDocuments(query: string, limit = 10): Promise<SearchResult[]> {
+        await this.ensureOramaInitialized();
+        console.error(`[DocumentManager] searchAllDocuments query="${query}" limit=${limit}`);
+        const queryEmbedding = await this.embeddingProvider.generateEmbedding(query);
+        return this.oramaStore.searchAllDocuments(queryEmbedding, limit, query);
     }
 
     private generateId(content: string): string {
@@ -265,8 +209,6 @@ export class DocumentManager {
     
     /**
      * Extract text content from a PDF file with streaming support for large files
-     * @param filePath Path to the PDF file
-     * @returns Extracted text content
      */
     private async extractTextFromPdf(filePath: string): Promise<string> {
         try {
@@ -351,8 +293,11 @@ export class DocumentManager {
 
         try {
             // Get all supported files from uploads directory
-            const pattern = this.uploadsDir.replace(/\\/g, '/') + "/*{.txt,.md,.pdf}";
-            const files = await glob(pattern);
+            const allFiles = await readdir(this.uploadsDir);
+            console.error(`[DocumentManager] processUploadsFolder found ${allFiles.length} files in uploads`);
+            const files = allFiles
+                .filter(f => supportedExtensions.includes(path.extname(f).toLowerCase()))
+                .map(f => path.join(this.uploadsDir, f));
 
             for (const filePath of files) {
                 try {
@@ -384,7 +329,7 @@ export class DocumentManager {
                     // Check if document with this filename already exists and remove it
                     const existingDoc = await this.findDocumentByTitle(title);
                     if (existingDoc) {
-                        await this.removeDocument(existingDoc.id);
+                        await this.deleteDocument(existingDoc.id);
                     }
 
                     // Create new document with embeddings
@@ -395,7 +340,7 @@ export class DocumentManager {
                         processedAt: new Date().toISOString()
                     });
 
-                    // Copy original file to data directory with same name as JSON file (keep backup in uploads)
+                    // Copy original file to data directory with same name as document ID
                     const documentId = document.id;
                     const destinationFileName = `${documentId}${fileExtension}`;
                     const destinationPath = path.join(this.dataDir, destinationFileName);
@@ -424,31 +369,19 @@ export class DocumentManager {
         return documents.find(doc => doc.title === title) || null;
     }
 
-    private async removeDocument(documentId: string): Promise<void> {
-        try {
-            const documentPath = this.getDocumentPath(documentId);
-            if (existsSync(documentPath)) {
-                await import('fs/promises').then(fs => fs.unlink(documentPath));
-            }
-        } catch (error) {
-            // Ignore errors when removing non-existent files
-        }
-    }
-
     async listUploadsFiles(): Promise<{ name: string; size: number; modified: string; supported: boolean }[]> {
         const supportedExtensions = ['.txt', '.md', '.pdf'];
         const files: { name: string; size: number; modified: string; supported: boolean }[] = [];
 
         try {
-            const pattern = this.uploadsDir.replace(/\\/g, '/') + "/*";
-            const filePaths = await glob(pattern);
+            const allFiles = await readdir(this.uploadsDir);
+            const fsp = await import('fs/promises');
 
-            for (const filePath of filePaths) {
-                const stats = await import('fs/promises').then(fs => fs.stat(filePath));
+            for (const fileName of allFiles) {
+                const filePath = path.join(this.uploadsDir, fileName);
+                const stats = await fsp.stat(filePath);
                 if (stats.isFile()) {
-                    const fileName = path.basename(filePath);
                     const fileExtension = path.extname(fileName).toLowerCase();
-                    
                     files.push({
                         name: fileName,
                         size: stats.size,
@@ -465,16 +398,12 @@ export class DocumentManager {
     }
 
     async deleteDocument(documentId: string): Promise<boolean> {
-        try {
-            const documentPath = this.getDocumentPath(documentId);
-            let deletedMainFile = false;
+        await this.ensureOramaInitialized();
 
-            // Delete main JSON file
-            if (existsSync(documentPath)) {
-                await unlink(documentPath);
-                deletedMainFile = true;
-                console.error(`[DocumentManager] Deleted JSON file: ${documentId}.json`);
-            }
+        try {
+            console.error(`[DocumentManager] deleteDocument id=${documentId}`);
+            // Delete from Orama
+            const deleted = await this.oramaStore.deleteDocument(documentId);
 
             // Delete associated markdown file
             const mdPath = this.getDocumentMdPath(documentId);
@@ -483,11 +412,11 @@ export class DocumentManager {
                 console.error(`[DocumentManager] Deleted markdown file: ${documentId}.md`);
             }
 
-            // Delete associated original files (any extension except .json)
+            // Delete associated original files (any extension)
             try {
                 const files = await readdir(this.dataDir);
                 for (const file of files) {
-                    if (file.startsWith(documentId) && !file.endsWith('.json')) {
+                    if (file.startsWith(documentId) && !file.endsWith('.json') && !file.endsWith('.msp')) {
                         const filePath = path.join(this.dataDir, file);
                         await unlink(filePath);
                         console.error(`[DocumentManager] Deleted associated file: ${file}`);
@@ -497,15 +426,11 @@ export class DocumentManager {
                 console.error(`[DocumentManager] Warning: Could not delete associated files for ${documentId}: ${fileError instanceof Error ? fileError.message : String(fileError)}`);
             }
 
-            // Remove from index if enabled
-            if (this.useIndexing && this.documentIndex) {
-                this.documentIndex.removeDocument(documentId);
-            }
-
             // Remove Gemini file mapping if exists
             await GeminiFileMappingService.removeMapping(documentId);
 
-            return deletedMainFile;
+            console.error(`[DocumentManager] deleteDocument completed id=${documentId} deleted=${deleted}`);
+            return deleted;
         } catch (error) {
             throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -517,15 +442,10 @@ export class DocumentManager {
     getStats(): any {
         const stats: any = {
             features: {
-                indexing: this.useIndexing,
-                parallelProcessing: this.useParallelProcessing,
-                streaming: this.useStreaming
+                streaming: this.useStreaming,
+                storage: 'orama'
             }
         };
-
-        if (this.useIndexing && this.documentIndex) {
-            stats.indexing = this.documentIndex.getStats();
-        }
 
         if (this.embeddingProvider && typeof this.embeddingProvider.getCacheStats === 'function') {
             stats.embedding_cache = this.embeddingProvider.getCacheStats();

@@ -93,6 +93,55 @@ export interface DocumentStorage {
     search(embedding: number[], options?: SearchOptions): Promise<SearchResult[]>;
 }
 
+// Orama DB schema types
+export interface OramaChunkDocument {
+    id: string;
+    document_id: string;
+    document_title: string;
+    chunk_index: number;
+    content: string;
+    embedding: number[];
+    start_position: number;
+    end_position: number;
+    metadata: string; // stringified JSON
+}
+
+export interface OramaDocDocument {
+    id: string;
+    title: string;
+    content: string;
+    created_at: string;
+    updated_at: string;
+    metadata: string; // stringified JSON
+}
+
+// Parent chunk stored in its own Orama DB (parent-child chunking pattern)
+export interface OramaParentDocument {
+    id: string;
+    document_id: string;
+    parent_index: number;
+    content: string;
+    heading: string;
+    start_position: number;
+    end_position: number;
+}
+
+// Data returned by IntelligentChunker for each parent
+export interface ParentChunkData {
+    index: number;
+    content: string;
+    startPosition: number;
+    endPosition: number;
+    heading?: string;
+    contentType: string;
+}
+
+// Result of chunking: children (for embedding) + parents (for context)
+export interface ChunkingResult {
+    children: DocumentChunk[];
+    parents: ParentChunkData[];
+}
+
 export interface ServerConfig {
     dataDir?: string;
     embeddingProvider?: EmbeddingProvider;
