@@ -1158,21 +1158,15 @@ document.getElementById('context-form').addEventListener('submit', async (e) => 
     container.innerHTML = '<div style="text-align:center;padding:20px"><span class="spinner"></span> Loading...</div>';
     try {
         const result = await api('POST', '/context-window', { document_id, parent_index, before, after });
+        const combinedText = result.window.map(c => c.content).join('\n\n');
         container.innerHTML = `<div class="card">
-            <div class="card-title">Context Window (Total sections: ${result.total_parents})</div>
+            <div class="card-title">Context Window · Sections ${result.window[0].parent_index}–${result.window[result.window.length-1].parent_index} of ${result.total_parents - 1}</div>
             <div class="chunk-nav">
                 ${result.window.map(c => `
                     <span class="chunk-badge ${c.parent_index === result.center ? 'center' : ''}">#${c.parent_index}</span>
                 `).join('')}
             </div>
-            ${result.window.map(c => `
-                <div class="result-item" style="${c.parent_index === result.center ? 'border-color:var(--accent)' : ''}">
-                    <div class="result-header">
-                        <div class="result-meta">Section #${c.parent_index} ${c.parent_index === result.center ? '(center)' : ''}${c.heading ? ' — § ' + escHtml(c.heading) : ''}</div>
-                    </div>
-                    <div class="result-content">${escHtml(c.content)}</div>
-                </div>
-            `).join('')}
+            <div class="doc-content-view" style="white-space:pre-wrap;line-height:1.7">${escHtml(combinedText)}</div>
         </div>`;
     } catch (err) {
         container.innerHTML = '';
@@ -1182,9 +1176,9 @@ document.getElementById('context-form').addEventListener('submit', async (e) => 
 
 // Context shortcut from search results
 function loadContext(docId, parentIdx) {
+    navigateTo('context-window');
     document.getElementById('cw-docid').value = docId;
     document.getElementById('cw-index').value = parentIdx;
-    navigateTo('context-window');
     document.getElementById('context-form').dispatchEvent(new Event('submit'));
 }
 

@@ -492,30 +492,47 @@ export class OramaStore {
     /**
      * Search chunks using vector similarity, optionally filtered by document_id
      */
-    async searchChunks(embedding: number[], limit: number = 10, documentId?: string): Promise<SearchResult[]> {
+    async searchChunks(embedding: number[], limit: number = 10, documentId?: string, term?: string): Promise<SearchResult[]> {
         if (!this.initialized) await this.initialize();
         if (!this.chunksDb) return [];
 
         try {
-            const searchParams: any = {
-                mode: 'vector',
-                vector: {
-                    value: embedding,
-                    property: 'embedding',
-                },
-                similarity: 0.5,
-                limit,
-                includeVectors: false,
-            };
+            let results: Results<OramaChunkDocument>;
 
-            // Add document_id filter if specified
-            if (documentId) {
-                searchParams.where = {
-                    document_id: documentId,
+            if (term) {
+                // Hybrid search (full-text + vector) with optional document filter
+                const searchParams: any = {
+                    term,
+                    mode: 'hybrid',
+                    vector: {
+                        value: embedding,
+                        property: 'embedding',
+                    },
+                    properties: ['content', 'document_title'],
+                    similarity: 0.5,
+                    limit,
+                    includeVectors: false,
                 };
+                if (documentId) {
+                    searchParams.where = { document_id: documentId };
+                }
+                results = await search(this.chunksDb, searchParams) as Results<OramaChunkDocument>;
+            } else {
+                const searchParams: any = {
+                    mode: 'vector',
+                    vector: {
+                        value: embedding,
+                        property: 'embedding',
+                    },
+                    similarity: 0.5,
+                    limit,
+                    includeVectors: false,
+                };
+                if (documentId) {
+                    searchParams.where = { document_id: documentId };
+                }
+                results = await search(this.chunksDb, searchParams) as Results<OramaChunkDocument>;
             }
-
-            const results = await search(this.chunksDb, searchParams) as Results<OramaChunkDocument>;
 
             return results.hits.map(hit => ({
                 chunk: {

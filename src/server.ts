@@ -55,6 +55,37 @@ server.addTool({
     },
 });
 
+// Delete document tool
+server.addTool({
+    name: "delete_document",
+    description: "Delete a document from the collection",
+    parameters: z.object({
+        id: z.string().describe("Document ID to delete")
+    }),
+    execute: async ({ id }) => {
+        try {
+            const manager = await initializeDocumentManager();
+            
+            // Check if document exists first
+            const document = await manager.getDocument(id);
+            if (!document) {
+                return `Document not found: ${id}`;
+            }
+
+            // Delete the document
+            const success = await manager.deleteDocument(id);
+            
+            if (success) {
+                return `Document "${document.title}" (${id}) has been deleted successfully.`;
+            } else {
+                return `Document not found or already deleted: ${id}`;
+            }
+        } catch (error) {
+            throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    },
+});
+
 // Search documents tool
 server.addTool({
     name: "search_documents",
@@ -93,7 +124,7 @@ server.addTool({
 // Get document tool
 server.addTool({
     name: "get_document",
-    description: "Retrieve a specific document by ID. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
+    description: "Use this tool only when user explicitly requests it. Retrieve a specific document by ID. Always tell the user if result is truncated because of length. for example if you recive a message like this in the response: 'Tool response was too long and was truncated'",
     parameters: z.object({
         id: z.string().describe("The document ID"),
     }), execute: async (args) => {
@@ -129,106 +160,6 @@ server.addTool({
         }
     },
 });
-
-// Get uploads folder path tool
-server.addTool({
-    name: "get_uploads_path",
-    description: "Get the absolute path to the uploads folder where you can manually place .txt and .md files",
-    parameters: z.object({}),
-    execute: async () => {
-        try {
-            const manager = await initializeDocumentManager();
-            const uploadsPath = manager.getUploadsPath();
-            return `Uploads folder path: ${uploadsPath}\n\nYou can place .txt and .md files in this folder, then use the 'process_uploads' tool to create embeddings for them.`;
-        } catch (error) {
-            throw new Error(`Failed to get uploads path: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    },
-});
-
-// Process uploads folder tool
-server.addTool({
-    name: "process_uploads",
-    description: "Process all .txt and .md files in the uploads folder and create embeddings for them",
-    parameters: z.object({}), execute: async () => {
-        try {
-            const manager = await initializeDocumentManager();
-            const result = await manager.processUploadsFolder();
-
-            let message = `Processing completed!\n`;
-            message += `- Files processed: ${result.processed}\n`;
-
-            if (result.errors.length > 0) {
-                message += `- Errors encountered: ${result.errors.length}\n`;
-                message += `\nErrors:\n${result.errors.map(err => `  • ${err}`).join('\n')}`;
-            }
-
-            return message;
-        } catch (error) {
-            throw new Error(`Failed to process uploads: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    },
-});
-
-// List uploads files tool
-server.addTool({
-    name: "list_uploads_files",
-    description: "List all files in the uploads folder with their details",
-    parameters: z.object({}), execute: async () => {
-        try {
-            const manager = await initializeDocumentManager();
-            const files = await manager.listUploadsFiles();
-
-            if (files.length === 0) {
-                return "No files found in the uploads folder.";
-            }
-
-            const fileList = files.map(file => ({
-                name: file.name,
-                size_bytes: file.size,
-                modified: file.modified,
-                supported: file.supported,
-                status: file.supported ? "Can be processed" : "Unsupported format"
-            }));
-
-            return JSON.stringify(fileList, null, 2);
-        } catch (error) {
-            throw new Error(`Failed to list uploads files: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    },
-});
-
-// Delete document tool
-server.addTool({
-    name: "delete_document",
-    description: "Delete a document from the collection",
-    parameters: z.object({
-        id: z.string().describe("Document ID to delete")
-    }),
-    execute: async ({ id }) => {
-        try {
-            const manager = await initializeDocumentManager();
-            
-            // Check if document exists first
-            const document = await manager.getDocument(id);
-            if (!document) {
-                return `Document not found: ${id}`;
-            }
-
-            // Delete the document
-            const success = await manager.deleteDocument(id);
-            
-            if (success) {
-                return `Document "${document.title}" (${id}) has been deleted successfully.`;
-            } else {
-                return `Document not found or already deleted: ${id}`;
-            }
-        } catch (error) {
-            throw new Error(`Failed to delete document: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    },
-});
-
 
 // Search across all documents tool
 server.addTool({
@@ -395,7 +326,96 @@ if (process.env.START_WEB_UI !== 'false') {
     }).catch(err => {
         console.error('[Server] Failed to start Web UI:', err instanceof Error ? err.message : String(err));
     });
+
+    server.addTool({
+        name: "get_ui_url",
+        description: "Get the URL of the web UI. use this tool when user ask you to access the web interface, when the user ask you to upload a file or when the user ask you the uploads folder path. All these function are available in the web UI.",
+        parameters: z.object({}),
+        execute: async () => {
+            try {
+                
+                let PORT = process.env.WEB_PORT || '3080';                
+                return `Web UI URL: http://localhost:${PORT}\n\nYou can access the web interface using this URL.`;
+            } catch (error) {
+                throw new Error(`Failed to get web UI URL: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        },
+    });
 }
+
+
+// if (process.env.START_WEB_UI !== undefined && process.env.START_WEB_UI !== 'true') {
+
+    // Get uploads folder path tool
+    server.addTool({
+        name: "get_uploads_path",
+        description: "Get the absolute path to the uploads folder where you can manually place .txt and .md files",
+        parameters: z.object({}),
+        execute: async () => {
+            try {
+                const manager = await initializeDocumentManager();
+                const uploadsPath = manager.getUploadsPath();
+                return `Uploads folder path: ${uploadsPath}\n\nYou can place .txt and .md files in this folder, then use the 'process_uploads' tool to create embeddings for them.`;
+            } catch (error) {
+                throw new Error(`Failed to get uploads path: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        },
+    });
+    
+    // Process uploads folder tool
+    server.addTool({
+        name: "process_uploads",
+        description: "Process all .txt and .md files in the uploads folder and create embeddings for them",
+        parameters: z.object({}), execute: async () => {
+            try {
+                const manager = await initializeDocumentManager();
+                const result = await manager.processUploadsFolder();
+    
+                let message = `Processing completed!\n`;
+                message += `- Files processed: ${result.processed}\n`;
+    
+                if (result.errors.length > 0) {
+                    message += `- Errors encountered: ${result.errors.length}\n`;
+                    message += `\nErrors:\n${result.errors.map(err => `  • ${err}`).join('\n')}`;
+                }
+    
+                return message;
+            } catch (error) {
+                throw new Error(`Failed to process uploads: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        },
+    });
+    
+    // List uploads files tool
+    server.addTool({
+        name: "list_uploads_files",
+        description: "List all files in the uploads folder with their details",
+        parameters: z.object({}), execute: async () => {
+            try {
+                const manager = await initializeDocumentManager();
+                const files = await manager.listUploadsFiles();
+    
+                if (files.length === 0) {
+                    return "No files found in the uploads folder.";
+                }
+    
+                const fileList = files.map(file => ({
+                    name: file.name,
+                    size_bytes: file.size,
+                    modified: file.modified,
+                    supported: file.supported,
+                    status: file.supported ? "Can be processed" : "Unsupported format"
+                }));
+    
+                return JSON.stringify(fileList, null, 2);
+            } catch (error) {
+                throw new Error(`Failed to list uploads files: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        },
+    });
+    
+// }
+
 
 server.start({
     transportType: "stdio",

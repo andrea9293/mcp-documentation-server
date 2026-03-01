@@ -147,7 +147,7 @@ export class DocumentManager {
         await this.ensureOramaInitialized();
         console.error(`[DocumentManager] searchDocuments documentId=${documentId} query="${query}" limit=${limit}`);
         const queryEmbedding = await this.embeddingProvider.generateEmbedding(query);
-        return this.oramaStore.searchChunks(queryEmbedding, limit, documentId);
+        return this.oramaStore.searchChunks(queryEmbedding, limit, documentId, query);
     }
 
     /**

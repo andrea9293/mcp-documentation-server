@@ -40,6 +40,25 @@ A TypeScript-based [Model Context Protocol (MCP)](https://modelcontextprotocol.i
 
 Example configuration for an MCP client (e.g., Claude Desktop, VS Code):
 
+#### Quick Start
+
+```json
+{
+  "mcpServers": {
+    "documentation": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@andrea9293/mcp-documentation-server"
+      ]
+    }
+  }
+}
+```
+
+Advanced with env vars (all vars are optional)
+
+
 ```json
 {
   "mcpServers": {
@@ -52,7 +71,9 @@ Example configuration for an MCP client (e.g., Claude Desktop, VS Code):
       "env": {
         "MCP_BASE_DIR": "/path/to/workspace",
         "GEMINI_API_KEY": "your-api-key-here",
-        "MCP_EMBEDDING_MODEL": "Xenova/all-MiniLM-L6-v2"
+        "MCP_EMBEDDING_MODEL": "Xenova/all-MiniLM-L6-v2",
+        "START_WEB_UI": "true",
+        "WEB_PORT": "3080",
       }
     }
   }
@@ -110,6 +131,7 @@ The server registers the following tools (all validated with Zod schemas):
 | `process_uploads` | Process all files in the uploads folder (chunking + embeddings) |
 | `get_uploads_path` | Returns the absolute path to the uploads folder |
 | `list_uploads_files` | Lists files in the uploads folder with size and format info |
+| `get_ui_url` | Returns the Web UI URL (e.g. http://localhost:3080) — useful to open the dashboard or to locate the uploads folder from the browser |
 
 ### 🔍 Search
 | Tool | Description |
