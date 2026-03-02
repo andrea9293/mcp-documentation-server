@@ -1,3 +1,15 @@
+# [1.13.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.12.0...v1.13.0) (2026-03-02)
+
+
+### Features
+
+* add web server for document management and search API ([34aee75](https://github.com/andrea9293/mcp-documentation-server/commit/34aee75a71b4a1332bc15d93ed308502fba4c515))
+* enhance document management with new tools for deleting documents, retrieving web UI URL, and processing uploads ([b675c47](https://github.com/andrea9293/mcp-documentation-server/commit/b675c47a4db1b5cc0a9400978dd21cee50d42278))
+* enhance document management with parent chunk retrieval and context window navigation ([4cdbd5d](https://github.com/andrea9293/mcp-documentation-server/commit/4cdbd5dbb79cdbd89289dcd724dcc79bed0b79bf))
+* enhance README with detailed web UI features and usage instructions ([9e3a2c8](https://github.com/andrea9293/mcp-documentation-server/commit/9e3a2c860274e3f19cc91a2aad7451edc39cc41a))
+* implement parent-child chunking pattern with separate parents DB ([6a6b7ca](https://github.com/andrea9293/mcp-documentation-server/commit/6a6b7ca43ba2a71a7f0f1165cf887ee33f97e0a2))
+* implement parent-child deduplication and enhance document formatting in search results ([a6e1991](https://github.com/andrea9293/mcp-documentation-server/commit/a6e1991eed348dc5c2e703e4e7d9383c4ae70a65))
+
 # [1.12.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.11.2...v1.12.0) (2025-12-02)
 
 
