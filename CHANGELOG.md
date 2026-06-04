@@ -1,3 +1,10 @@
+## [1.13.2](https://github.com/andrea9293/mcp-documentation-server/compare/v1.13.1...v1.13.2) (2026-06-04)
+
+
+### Bug Fixes
+
+* override npm@11 for @semantic-release/npm to resolve ip-address and picomatch vulns ([e57b1be](https://github.com/andrea9293/mcp-documentation-server/commit/e57b1beca685be8f4a311d9d08bc1d0fba04e587))
+
 ## [1.13.1](https://github.com/andrea9293/mcp-documentation-server/compare/v1.13.0...v1.13.1) (2026-06-04)
 
 
