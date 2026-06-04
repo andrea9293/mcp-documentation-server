@@ -1,3 +1,12 @@
+## [1.13.1](https://github.com/andrea9293/mcp-documentation-server/compare/v1.13.0...v1.13.1) (2026-06-04)
+
+
+### Bug Fixes
+
+* resolve 31 security vulnerabilities and bind web UI to 127.0.0.1 ([37159d4](https://github.com/andrea9293/mcp-documentation-server/commit/37159d4e06b8ee50c3645b2496e3d3f6d32c47f9))
+* revert @semantic-release/npm to v12 to restore npm publish auth ([f2b513d](https://github.com/andrea9293/mcp-documentation-server/commit/f2b513d9d89d1cf2ca6375a94818230224bd74b6))
+* revert semantic-release to v24 to restore npm publish auth ([7ffae1b](https://github.com/andrea9293/mcp-documentation-server/commit/7ffae1b8386ac4e2f34dbead6741dde5d620da6a))
+
 # [1.13.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.12.0...v1.13.0) (2026-03-02)
 
 
