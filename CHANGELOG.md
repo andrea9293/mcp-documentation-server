@@ -1,3 +1,11 @@
+# [1.14.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.13.2...v1.14.0) (2026-06-04)
+
+
+### Features
+
+* add REST API skill for AI agents ([cabf886](https://github.com/andrea9293/mcp-documentation-server/commit/cabf8864edf4c716657f98c0a63c6887e5dabb87))
+* add REST API skill for AI agents ([fe9e36f](https://github.com/andrea9293/mcp-documentation-server/commit/fe9e36fbcb575fba4743f0b73fe593d45ada942e))
+
 ## [1.13.2](https://github.com/andrea9293/mcp-documentation-server/compare/v1.13.1...v1.13.2) (2026-06-04)
 
 
