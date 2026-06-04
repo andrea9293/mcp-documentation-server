@@ -114,6 +114,36 @@ npm run web:build    # Production (compiled)
 2. Search across everything with `search_all_documents`, or within a single document with `search_documents`.
 3. Use `get_context_window` to fetch neighboring chunks and give the LLM broader context.
 
+### 🤖 Agent Skill (REST API) — recommended for AI agents
+
+Every MCP tool is also accessible via the **REST API** on `http://127.0.0.1:3080/api/`. **This is the recommended way to interact with the server from AI agents** (Claude Code, OpenCode, Gemini CLI, Cursor, etc.) because it avoids loading MCP tool schemas into the conversation context — only the response JSON enters.
+
+```bash
+# Check if the server is running
+curl -s http://127.0.0.1:3080/api/config
+
+# List all documents
+curl -s http://127.0.0.1:3080/api/documents
+
+# Search across all documents
+curl -s -X POST http://127.0.0.1:3080/api/search-all \
+  -H "Content-Type: application/json" \
+  -d '{"query": "your search", "limit": 5}'
+```
+
+A ready-to-use skill is included at `skills/documentation-server/SKILL.md` — it teaches your agent every endpoint with examples. Install it:
+
+```bash
+# Install from the public repo
+npx skills add https://github.com/andrea9293/mcp-documentation-server --skill documentation-server
+```
+
+Or manually:
+
+```bash
+cp -r skills/documentation-server ~/.agents/skills/
+```
+
 ## MCP Tools
 
 The server registers the following tools (all validated with Zod schemas):
