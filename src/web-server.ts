@@ -23,6 +23,7 @@ const app = express();
  */
 export async function startWebServer(portArg?: number, sharedManager?: DocumentManager) {
     const PORT = parseInt(String(portArg || process.env.WEB_PORT || '3080'));
+    const HOST = process.env.WEB_HOST || '127.0.0.1';
 
 // Middleware
 app.use(express.json({ limit: '50mb' }));
@@ -287,12 +288,19 @@ app.get('/{*splat}', (_req, res) => {
     res.sendFile(path.join(staticDir, 'index.html'));
 });
 
-    // Start server
-    const server = app.listen(PORT, () => {
+    // Start server (bind to HOST, default 127.0.0.1 for security)
+    const server = app.listen(PORT, HOST, () => {
         console.log(`\n  🌐 MCP Documentation Server - Web UI`);
         console.log(`  ────────────────────────────────────`);
-        console.log(`  Local:   http://localhost:${PORT}`);
-        console.log(`  Network: http://0.0.0.0:${PORT}\n`);
+        console.log(`  Local:   http://${HOST}:${PORT}`);
+        if (HOST !== '127.0.0.1' && HOST !== 'localhost') {
+            console.log(`  Network: http://${HOST}:${PORT}`);
+        }
+        console.log(`  Bind:    ${HOST}:${PORT}`);
+        if (HOST === '127.0.0.1') {
+            console.log(`  ℹ️  Set WEB_HOST=0.0.0.0 to expose on all interfaces`);
+        }
+        console.log();
     });
 
     return server;

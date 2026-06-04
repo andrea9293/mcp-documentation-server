@@ -73,6 +73,7 @@ Advanced with env vars (all vars are optional)
         "GEMINI_API_KEY": "your-api-key-here",
         "MCP_EMBEDDING_MODEL": "Xenova/all-MiniLM-L6-v2",
         "START_WEB_UI": "true",
+        "WEB_HOST": "127.0.0.1",
         "WEB_PORT": "3080",
       }
     }
@@ -152,6 +153,7 @@ Configure via environment variables or a `.env` file in the project root:
 | `GEMINI_API_KEY` | — | Google Gemini API key (enables `search_documents_with_ai`) |
 | `MCP_CACHE_ENABLED` | `true` | Enable/disable LRU embedding cache |
 | `START_WEB_UI` | `true` | Set to `false` to disable the built-in web interface |
+| `WEB_HOST` | `127.0.0.1` | Bind address for the web UI (use `0.0.0.0` to expose on all interfaces) |
 | `WEB_PORT` | `3080` | Port for the web UI |
 | `MCP_STREAMING_ENABLED` | `true` | Enable streaming reads for large files |
 | `MCP_STREAM_CHUNK_SIZE` | `65536` | Streaming buffer size in bytes (64KB) |
