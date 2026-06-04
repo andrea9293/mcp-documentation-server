@@ -1,4 +1,4 @@
-[![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/72109e6a-27fa-430d-9034-571e7065fe05) [![npm version](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server.svg)](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/andrea9293/mcp-documentation-server) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![npm version](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server.svg)](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/andrea9293/mcp-documentation-server) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 [![Donate with PayPal](https://i.ibb.co/SX4qQBfm/paypal-donate-button171.png)](https://www.paypal.com/donate/?hosted_button_id=HXATGECV8HUJN) 
 
@@ -35,6 +35,56 @@ A TypeScript-based [Model Context Protocol (MCP)](https://modelcontextprotocol.i
 - **Local-only storage**: All data resides in `~/.mcp-documentation-server/`
 
 ## Quick Start
+
+### Basic workflow
+
+1. Add documents using `add_document` or place `.txt` / `.md` / `.pdf` files in the uploads folder and call `process_uploads`.
+2. Search across everything with `search_all_documents`, or within a single document with `search_documents`.
+3. Use `get_context_window` to fetch neighboring chunks and give the LLM broader context.
+
+### 🤖 Agent Skill (REST API) — recommended for AI agents
+
+Every MCP tool is also accessible via the **REST API** on `http://127.0.0.1:3080/api/`. **This is the recommended way to interact with the server from AI agents** (Claude Code, OpenCode, Gemini CLI, Cursor, etc.) because it avoids loading MCP tool schemas into the conversation context — only the response JSON enters
+
+```bash
+# Check if the server is running
+curl -s http://127.0.0.1:3080/api/config
+
+# List all documents
+curl -s http://127.0.0.1:3080/api/documents
+
+# Search across all documents
+curl -s -X POST http://127.0.0.1:3080/api/search-all \
+  -H "Content-Type: application/json" \
+  -d '{"query": "your search", "limit": 5}'
+```
+
+A ready-to-use skill is included at `skills/documentation-server/SKILL.md` — it teaches your agent every endpoint with examples. Install it:
+
+```bash
+# Install from the public repo
+npx skills add https://github.com/andrea9293/mcp-documentation-server --skill documentation-server
+```
+
+Configure the mcp only if you want a granular control about environment variables 
+
+### Web UI
+
+The web interface starts automatically on port **3080** when the MCP server launches. Open your browser at:
+
+```
+http://localhost:3080
+```
+
+From the web UI you can:
+- 📊 **Dashboard** — overview of all documents and stats
+- 📄 **Documents** — browse, view, and delete documents
+- ➕ **Add Document** — create documents with title, content, and metadata
+- 🔍 **Search All** — semantic search across all documents
+- 🎯 **Search in Doc** — search within a specific document
+- 🤖 **AI Search** — Gemini-powered analysis (if `GEMINI_API_KEY` is set)
+- 📁 **Upload Files** — drag & drop files and process them into the knowledge base
+- 🪟 **Context Window** — explore chunks around a specific index
 
 ### Configure an MCP client
 
@@ -82,67 +132,6 @@ Advanced with env vars (all vars are optional)
 ```
 
 All environment variables are optional. Without `GEMINI_API_KEY`, only the local embedding-based search tools are available.
-
-### Web UI
-
-The web interface starts automatically on port **3080** when the MCP server launches. Open your browser at:
-
-```
-http://localhost:3080
-```
-
-From the web UI you can:
-- 📊 **Dashboard** — overview of all documents and stats
-- 📄 **Documents** — browse, view, and delete documents
-- ➕ **Add Document** — create documents with title, content, and metadata
-- 🔍 **Search All** — semantic search across all documents
-- 🎯 **Search in Doc** — search within a specific document
-- 🤖 **AI Search** — Gemini-powered analysis (if `GEMINI_API_KEY` is set)
-- 📁 **Upload Files** — drag & drop files and process them into the knowledge base
-- 🪟 **Context Window** — explore chunks around a specific index
-
-To run the web UI standalone (without the MCP server):
-
-```bash
-npm run web          # Development (tsx)
-npm run web:build    # Production (compiled)
-```
-
-### Basic workflow
-
-1. Add documents using `add_document` or place `.txt` / `.md` / `.pdf` files in the uploads folder and call `process_uploads`.
-2. Search across everything with `search_all_documents`, or within a single document with `search_documents`.
-3. Use `get_context_window` to fetch neighboring chunks and give the LLM broader context.
-
-### 🤖 Agent Skill (REST API) — recommended for AI agents
-
-Every MCP tool is also accessible via the **REST API** on `http://127.0.0.1:3080/api/`. **This is the recommended way to interact with the server from AI agents** (Claude Code, OpenCode, Gemini CLI, Cursor, etc.) because it avoids loading MCP tool schemas into the conversation context — only the response JSON enters.
-
-```bash
-# Check if the server is running
-curl -s http://127.0.0.1:3080/api/config
-
-# List all documents
-curl -s http://127.0.0.1:3080/api/documents
-
-# Search across all documents
-curl -s -X POST http://127.0.0.1:3080/api/search-all \
-  -H "Content-Type: application/json" \
-  -d '{"query": "your search", "limit": 5}'
-```
-
-A ready-to-use skill is included at `skills/documentation-server/SKILL.md` — it teaches your agent every endpoint with examples. Install it:
-
-```bash
-# Install from the public repo
-npx skills add https://github.com/andrea9293/mcp-documentation-server --skill documentation-server
-```
-
-Or manually:
-
-```bash
-cp -r skills/documentation-server ~/.agents/skills/
-```
 
 ## MCP Tools
 
