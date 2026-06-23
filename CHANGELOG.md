@@ -1,3 +1,11 @@
+# [1.15.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.14.0...v1.15.0) (2026-06-23)
+
+
+### Features
+
+* add MCP Registry publishing support ([379e676](https://github.com/andrea9293/mcp-documentation-server/commit/379e676ab14268090e8b94e6a1cd232450394b3f))
+* add MCP Registry publishing support ([d6f3d50](https://github.com/andrea9293/mcp-documentation-server/commit/d6f3d50c2ecdf8c1371de212cd4f3aafc041c187))
+
 # [1.14.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.13.2...v1.14.0) (2026-06-04)
 
 
