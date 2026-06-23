@@ -71,13 +71,22 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Download MCP Publisher
         run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/download/latest/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          gh release download --repo modelcontextprotocol/registry \
+            --pattern "mcp-publisher_linux_amd64.tar.gz" \
+            --output - | tar xz mcp-publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
 
-      - name: Sync version from git tag
+      - name: Sync version from package.json
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          VERSION=$(node -p "require('./package.json').version")
           jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.json.tmp && mv server.json.tmp server.json
 
       - name: Publish to MCP Registry
