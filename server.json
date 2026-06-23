@@ -1,0 +1,18 @@
+{
+  "$schema": "https://registry.modelcontextprotocol.io/schema/server.json",
+  "name": "io.github.andrea9293/mcp-documentation-server",
+  "description": "Local-first document management and semantic search for AI coding agents",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/andrea9293/mcp-documentation-server"
+  },
+  "version": "1.14.0",
+  "packages": [
+    {
+      "name": "@andrea9293/mcp-documentation-server",
+      "type": "npm",
+      "version": "1.14.0",
+      "transport": "stdio"
+    }
+  ]
+}
