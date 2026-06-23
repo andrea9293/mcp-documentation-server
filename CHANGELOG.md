@@ -1,3 +1,10 @@
+## [1.15.1](https://github.com/andrea9293/mcp-documentation-server/compare/v1.15.0...v1.15.1) (2026-06-23)
+
+
+### Bug Fixes
+
+* use gh release download for mcp-publisher and sync version from package.json ([31f638d](https://github.com/andrea9293/mcp-documentation-server/commit/31f638dc63807dc9d2b9e330d9d10fcb224d8f92))
+
 # [1.15.0](https://github.com/andrea9293/mcp-documentation-server/compare/v1.14.0...v1.15.0) (2026-06-23)
 
 
