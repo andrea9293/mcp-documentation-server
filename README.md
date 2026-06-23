@@ -1,59 +1,47 @@
-[![npm version](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server.svg)](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/andrea9293/mcp-documentation-server) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![MCP Registry](https://img.shields.io/badge/MCP%20Registry-published-blue)](https://registry.modelcontextprotocol.io/servers/io.github.andrea9293/mcp-documentation-server)
+[![npm version](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server.svg)](https://badge.fury.io/js/@andrea9293%2Fmcp-documentation-server)
+[![GitHub Stars](https://img.shields.io/github/stars/andrea9293/mcp-documentation-server?style=social)](https://github.com/andrea9293/mcp-documentation-server)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/andrea9293/mcp-documentation-server)
 
-[![Donate with PayPal](https://i.ibb.co/SX4qQBfm/paypal-donate-button171.png)](https://www.paypal.com/donate/?hosted_button_id=HXATGECV8HUJN) 
-
+[![Donate with PayPal](https://i.ibb.co/SX4qQBfm/paypal-donate-button171.png)](https://www.paypal.com/donate/?hosted_button_id=HXATGECV8HUJN)
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/andrea.bravaccino)
-
 
 # MCP Documentation Server
 
-A TypeScript-based [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that provides local-first document management and semantic search. Documents are stored in an embedded [Orama](https://orama.com/) vector database with hybrid search (full-text + vector), intelligent chunking, and local AI embeddings — no external database or cloud service required.
+**Local-first document management and semantic search for AI coding agents.** No external databases, no cloud APIs, no vendor lock-in.
 
-## Core capabilities
+Unlike other MCP servers that are CLI-only, this one ships with a **full web dashboard** — browse, search, upload, and manage your knowledge base from your browser. Every MCP tool is also exposed as a REST API, giving AI agents a lean, schema-free interface.
 
-### 🌐 Web UI
-- **Built-in Web Interface**: A full-featured web dashboard starts automatically alongside the MCP server — no additional setup required
-- **Complete Tool Coverage**: Every MCP tool is accessible from the browser: add/view/delete documents, semantic search, AI search, file uploads, and context window exploration
-- **Drag & Drop Uploads**: Upload `.txt`, `.md`, and `.pdf` files directly from the browser
-- **Configurable**: Disable with `START_WEB_UI=false` or change the port with `WEB_PORT`
-
-### 🔍 Search & Intelligence
-- **Hybrid Search**: Combined full-text and vector similarity powered by Orama, for both single-document and cross-document queries
-- **AI-Powered Search** 🤖: Advanced document analysis with Google Gemini AI for contextual understanding and intelligent insights (optional, requires API key)
-- **Context Window Retrieval**: Fetch surrounding chunks to provide LLMs with richer context
-
-### ⚡ Performance & Architecture
-- **Orama Vector DB**: Embedded search engine with zero native dependencies — replaces manual JSON storage and cosine similarity
-- **LRU Embedding Cache**: Avoids recomputing embeddings for repeated content and queries
-- **Parent-Child Chunking**: Documents are split into large context-preserving parent chunks and small precise child chunks for vector search — search results include both the matched fragment and the full surrounding context
-- **Streaming File Reader**: Handles large files without high memory usage
-- **Automatic Migration**: Legacy JSON documents are migrated to Orama on first startup — no manual intervention needed
-
-### 📁 File Management
-- **Upload processing**: Drop `.txt`, `.md`, or `.pdf` files into the uploads folder and process them with a single tool call
-- **Copy-based storage**: Original files are backed up alongside the database
-- **Local-only storage**: All data resides in `~/.mcp-documentation-server/`
+- **🏠 Runs fully offline** — Orama vector DB with local AI embeddings (Transformers.js)
+- **🌐 Built-in Web UI** — starts automatically on port 3080 alongside the MCP server
+- **🔍 Hybrid search** — full-text + vector similarity with parent-child chunking
+- **🤖 Optional AI search** — Google Gemini for advanced document analysis (bring your own key)
+- **📁 Drag & drop uploads** — `.txt`, `.md`, `.pdf` support
+- **📦 Published on the [MCP Registry](https://registry.modelcontextprotocol.io/servers/io.github.andrea9293/mcp-documentation-server)** — installable via npx, no clone needed
 
 ## Quick Start
 
-### Basic workflow
+```json
+{
+  "mcpServers": {
+    "documentation": {
+      "command": "npx",
+      "args": ["-y", "@andrea9293/mcp-documentation-server"]
+    }
+  }
+}
+```
 
-1. Add documents using `add_document` or place `.txt` / `.md` / `.pdf` files in the uploads folder and call `process_uploads`.
-2. Search across everything with `search_all_documents`, or within a single document with `search_documents`.
-3. Use `get_context_window` to fetch neighboring chunks and give the LLM broader context.
+Open your browser at `http://localhost:3080` — the web UI starts automatically.
 
 ### 🤖 Agent Skill (REST API) — recommended for AI agents
 
-Every MCP tool is also accessible via the **REST API** on `http://127.0.0.1:3080/api/`. **This is the recommended way to interact with the server from AI agents** (Claude Code, OpenCode, Gemini CLI, Cursor, etc.) because it avoids loading MCP tool schemas into the conversation context — only the response JSON enters
+Every MCP tool is also accessible via the **REST API** on `http://127.0.0.1:3080/api/`. This is the recommended way to interact from AI agents (Claude Code, OpenCode, Gemini CLI, Cursor) because it avoids loading MCP tool schemas into the conversation context — only the response JSON enters.
 
 ```bash
-# Check if the server is running
 curl -s http://127.0.0.1:3080/api/config
-
-# List all documents
 curl -s http://127.0.0.1:3080/api/documents
-
-# Search across all documents
 curl -s -X POST http://127.0.0.1:3080/api/search-all \
   -H "Content-Type: application/json" \
   -d '{"query": "your search", "limit": 5}'
@@ -62,21 +50,19 @@ curl -s -X POST http://127.0.0.1:3080/api/search-all \
 A ready-to-use skill is included at `skills/documentation-server/SKILL.md` — it teaches your agent every endpoint with examples. Install it:
 
 ```bash
-# Install from the public repo
 npx skills add https://github.com/andrea9293/mcp-documentation-server --skill documentation-server
 ```
 
-Configure the mcp only if you want a granular control about environment variables 
+### Basic workflow
 
-### Web UI
+1. Add documents using `add_document` or place `.txt` / `.md` / `.pdf` files in the uploads folder and call `process_uploads`.
+2. Search across everything with `search_all_documents`, or within a single document with `search_documents`.
+3. Use `get_context_window` to fetch neighboring chunks and give the LLM broader context.
 
-The web interface starts automatically on port **3080** when the MCP server launches. Open your browser at:
+## Web UI
 
-```
-http://localhost:3080
-```
+The web interface starts automatically on port **3080** when the MCP server launches. From the web UI you can:
 
-From the web UI you can:
 - 📊 **Dashboard** — overview of all documents and stats
 - 📄 **Documents** — browse, view, and delete documents
 - ➕ **Add Document** — create documents with title, content, and metadata
@@ -86,45 +72,36 @@ From the web UI you can:
 - 📁 **Upload Files** — drag & drop files and process them into the knowledge base
 - 🪟 **Context Window** — explore chunks around a specific index
 
-### Configure an MCP client
+## Configure an MCP client
 
-Example configuration for an MCP client (e.g., Claude Desktop, VS Code):
-
-#### Quick Start
+#### Minimal
 
 ```json
 {
   "mcpServers": {
     "documentation": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@andrea9293/mcp-documentation-server"
-      ]
+      "args": ["-y", "@andrea9293/mcp-documentation-server"]
     }
   }
 }
 ```
 
-Advanced with env vars (all vars are optional)
-
+#### With environment variables (all optional)
 
 ```json
 {
   "mcpServers": {
     "documentation": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@andrea9293/mcp-documentation-server"
-      ],
+      "args": ["-y", "@andrea9293/mcp-documentation-server"],
       "env": {
         "MCP_BASE_DIR": "/path/to/workspace",
         "GEMINI_API_KEY": "your-api-key-here",
         "MCP_EMBEDDING_MODEL": "Xenova/all-MiniLM-L6-v2",
         "START_WEB_UI": "true",
         "WEB_HOST": "127.0.0.1",
-        "WEB_PORT": "3080",
+        "WEB_PORT": "3080"
       }
     }
   }
