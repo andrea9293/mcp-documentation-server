@@ -12,7 +12,9 @@
       "name": "@andrea9293/mcp-documentation-server",
       "type": "npm",
       "version": "1.14.0",
-      "transport": "stdio"
+      "transport": {
+        "type": "stdio"
+      }
     }
   ]
 }
