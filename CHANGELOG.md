@@ -1,3 +1,11 @@
+## [1.15.2](https://github.com/andrea9293/mcp-documentation-server/compare/v1.15.1...v1.15.2) (2026-06-23)
+
+
+### Bug Fixes
+
+* correct server.json format - use registryType/identifier, update schema URL ([06a9e0f](https://github.com/andrea9293/mcp-documentation-server/commit/06a9e0f60976dbcd3f79e8b42267d09c8e3b761c))
+* correct transport field format in server.json for MCP Registry ([b4b1efc](https://github.com/andrea9293/mcp-documentation-server/commit/b4b1efc43b17ea085626e6517152ae96b6f760d5))
+
 ## [1.15.1](https://github.com/andrea9293/mcp-documentation-server/compare/v1.15.0...v1.15.1) (2026-06-23)
 
 
