@@ -1,3 +1,10 @@
+## [1.15.3](https://github.com/andrea9293/mcp-documentation-server/compare/v1.15.2...v1.15.3) (2026-07-15)
+
+
+### Bug Fixes
+
+* send diagnostic logs to stderr instead of stdout ([5c4d84b](https://github.com/andrea9293/mcp-documentation-server/commit/5c4d84b4f6214400e50991df13e65feaed058605)), closes [#26](https://github.com/andrea9293/mcp-documentation-server/issues/26)
+
 ## [1.15.2](https://github.com/andrea9293/mcp-documentation-server/compare/v1.15.1...v1.15.2) (2026-06-23)
 
 
