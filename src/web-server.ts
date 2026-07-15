@@ -290,17 +290,17 @@ app.get('/{*splat}', (_req, res) => {
 
     // Start server (bind to HOST, default 127.0.0.1 for security)
     const server = app.listen(PORT, HOST, () => {
-        console.log(`\n  🌐 MCP Documentation Server - Web UI`);
-        console.log(`  ────────────────────────────────────`);
-        console.log(`  Local:   http://${HOST}:${PORT}`);
+        console.error(`\n  🌐 MCP Documentation Server - Web UI`);
+        console.error(`  ────────────────────────────────────`);
+        console.error(`  Local:   http://${HOST}:${PORT}`);
         if (HOST !== '127.0.0.1' && HOST !== 'localhost') {
-            console.log(`  Network: http://${HOST}:${PORT}`);
+            console.error(`  Network: http://${HOST}:${PORT}`);
         }
-        console.log(`  Bind:    ${HOST}:${PORT}`);
+        console.error(`  Bind:    ${HOST}:${PORT}`);
         if (HOST === '127.0.0.1') {
-            console.log(`  ℹ️  Set WEB_HOST=0.0.0.0 to expose on all interfaces`);
+            console.error(`  ℹ️  Set WEB_HOST=0.0.0.0 to expose on all interfaces`);
         }
-        console.log();
+        console.error();
     });
 
     return server;
