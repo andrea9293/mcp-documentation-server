@@ -239,6 +239,6 @@ MIT — see [LICENSE](LICENSE)
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=andrea9293/mcp-documentation-server&type=Date)](https://www.star-history.com/#andrea9293/mcp-documentation-server&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=andrea9293/mcp-documentation-server&type=Date)](https://star-history.dera.page/#andrea9293/mcp-documentation-server&Date)
 
 **Built with [FastMCP](https://github.com/punkpeye/fastmcp), [Orama](https://orama.com/), and TypeScript**
