@@ -64,7 +64,7 @@ npx skills add https://github.com/andrea9293/mcp-documentation-server --skill do
 The web interface starts automatically on port **3080** when the MCP server launches. From the web UI you can:
 
 - 📊 **Dashboard** — overview of all documents and stats
-- 📄 **Documents** — browse, view, and delete documents
+- 📄 **Documents** — browse, view (with rendered Markdown preview), and delete documents
 - ➕ **Add Document** — create documents with title, content, and metadata
 - 🔍 **Search All** — semantic search across all documents
 - 🎯 **Search in Doc** — search within a specific document
