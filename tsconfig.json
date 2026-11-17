@@ -19,5 +19,6 @@
     "forceConsistentCasingInFileNames": true,
     "lib": ["es2022", "dom"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/public"]
 }
