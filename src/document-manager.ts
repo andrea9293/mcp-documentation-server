@@ -99,9 +99,12 @@ export class DocumentManager {
         console.error(`[DocumentManager] Reindexing ${docs.length} documents (context-aware chunks)`);
         await this.oramaStore.resetChunkIndexes();
         for (const d of docs) {
-            await this.oramaStore.deleteDocument(d.id);
-            await this.indexDocument(d.id, d.title, d.content, d.metadata, d.created_at, d.updated_at, false);
+            const tags = Array.isArray(d.metadata?.tags) ? d.metadata.tags.map(String) : [];
+            const { children, parents } = await this.intelligentChunker.createChunks(d.id, d.content, {}, { title: d.title, tags });
+            await this.oramaStore.addChunksOnly({ ...d, chunks: children }, parents);
         }
+        // Single write at the end: an interrupted reindex leaves disk untouched and is retried
+        await this.oramaStore.commitReindex();
         return docs.length;
     }
 
@@ -124,8 +127,7 @@ export class DocumentManager {
         // explicit tags/folder/ticket survive; the rest of the old metadata is kept
         const base = { ...existing.metadata, ...(metadata || {}) };
         const derived = deriveDocument(newTitle, content, base);
-        await this.oramaStore.deleteDocument(id);
-        return this.indexDocument(id, newTitle, derived.content, derived.metadata, existing.created_at, new Date().toISOString());
+        return this.indexDocument(id, newTitle, derived.content, derived.metadata, existing.created_at, new Date().toISOString(), true, true);
     }
 
     /**
@@ -140,8 +142,7 @@ export class DocumentManager {
         for (const [k, v] of Object.entries(patch)) {
             if (v === null) delete merged[k]; else merged[k] = v;
         }
-        await this.oramaStore.deleteDocument(id);
-        return this.indexDocument(id, existing.title, existing.content, merged, existing.created_at, new Date().toISOString(), false);
+        return this.indexDocument(id, existing.title, existing.content, merged, existing.created_at, new Date().toISOString(), false, true);
     }
 
     /** Lightweight list (id, title, metadata, dates) without chunks. */
@@ -159,7 +160,7 @@ export class DocumentManager {
 
     private async indexDocument(
         id: string, title: string, content: string, metadata: Record<string, any>,
-        createdAt: string, updatedAt: string, writeMd = true
+        createdAt: string, updatedAt: string, writeMd = true, replace = false
     ): Promise<Document> {
 
         console.error(`[DocumentManager] Adding document id=${id} title=${title}`);
@@ -179,15 +180,18 @@ export class DocumentManager {
             updated_at: updatedAt,
         };
 
-        // Store document + children in Orama
-        await this.oramaStore.addDocument(document);
-        console.error(`[DocumentManager] Stored document in Orama: ${id}`);
-
-        // Store parent chunks in separate parents DB
-        if (parents.length > 0) {
-            await this.oramaStore.addParents(id, parents);
-            console.error(`[DocumentManager] Stored ${parents.length} parent chunks for: ${id}`);
+        if (replace) {
+            // Chunks/embeddings are ready: swap the old version in one atomic step
+            await this.oramaStore.replaceDocument(document, parents);
+        } else {
+            // Store document + children in Orama
+            await this.oramaStore.addDocument(document);
+            // Store parent chunks in separate parents DB
+            if (parents.length > 0) {
+                await this.oramaStore.addParents(id, parents);
+            }
         }
+        console.error(`[DocumentManager] Stored document in Orama: ${id} (${parents.length} parents)`);
 
         // Create markdown file with the document content
         if (writeMd) {

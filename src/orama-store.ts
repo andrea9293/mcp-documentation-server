@@ -32,6 +32,8 @@ export class OramaStore {
     private initialized = false;
     /** True when the restored chunks DB uses an older schema and must be rebuilt. */
     needsReindex = false;
+    /** True while a multi-step write (reindex / atomic replace) must not hit the disk. */
+    private batch = false;
 
     constructor(vectorDimensions: number) {
         const baseDir = getDefaultDataDir();
@@ -159,7 +161,44 @@ export class OramaStore {
         }
         this.chunksDb = this.createChunksDb();
         this.parentsDb = this.createParentsDb();
+        // Nothing is persisted (and needsReindex stays true) until commitReindex(), so an
+        // interrupted reindex is simply retried on the next start and never loses documents.
+        this.batch = true;
+    }
+
+    /** Insert chunks and parents of a document during a reindex (document record is kept). */
+    async addChunksOnly(doc: Document, parents: ParentChunkData[]): Promise<void> {
+        await this.addDocumentInternal(doc, false);
+        await this.addParents(doc.id, parents);
+    }
+
+    /** Finish a reindex: write everything to disk at once and mark the index as current. */
+    async commitReindex(): Promise<void> {
+        this.batch = false;
         this.needsReindex = false;
+        await this.persistToDisk();
+    }
+
+    /**
+     * Atomically replace a document (record, chunks, parents). The slow work (chunking and
+     * embedding) must be done by the caller beforehand; on failure memory is reloaded from
+     * disk, which still holds the previous version.
+     */
+    async replaceDocument(doc: Document, parents: ParentChunkData[]): Promise<void> {
+        if (!this.initialized) await this.initialize();
+        this.batch = true;
+        try {
+            await this.deleteDocument(doc.id);
+            await this.addDocumentInternal(doc);
+            if (parents.length > 0) await this.addParents(doc.id, parents);
+        } catch (error) {
+            this.batch = false;
+            this.initialized = false;
+            await this.initialize();
+            throw error;
+        }
+        this.batch = false;
+        await this.persistToDisk();
     }
 
     /**
@@ -206,6 +245,9 @@ export class OramaStore {
      * Persist all DBs to disk
      */
     private async persistToDisk(): Promise<void> {
+        // While a batch (reindex / atomic replace) is in progress nothing is written:
+        // the on-disk state only changes once the whole operation succeeded.
+        if (this.batch) return;
         try {
             if (this.chunksDb) {
                 await persistToFile(this.chunksDb, 'binary', this.chunksDbPath, 'node');
@@ -277,12 +319,12 @@ export class OramaStore {
      * Internal method to add a full Document (with chunks) to both DBs.
      * Used by migration and by addDocument.
      */
-    private async addDocumentInternal(doc: Document): Promise<void> {
+    private async addDocumentInternal(doc: Document, withRecord = true): Promise<void> {
         if (!this.docsDb || !this.chunksDb) throw new Error('OramaStore not initialized');
 
         console.error(`[OramaStore] Inserting document ${doc.id} (${doc.title}) with ${doc.chunks?.length || 0} chunks`);
         // Insert into docs DB
-        await insert(this.docsDb, {
+        if (withRecord) await insert(this.docsDb, {
             id: doc.id,
             title: doc.title,
             content: doc.content,
