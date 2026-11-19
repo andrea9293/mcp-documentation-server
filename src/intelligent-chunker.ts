@@ -16,6 +16,23 @@ export interface ParentChildChunkOptions {
     parentOverlap?: number;
 }
 
+/** Document-level context prepended to each child before embedding. */
+export interface ChunkContext {
+    title?: string;
+    tags?: string[];
+}
+
+/** Build the text that is embedded for a child: "title > heading path > text" (+ tags). */
+export function buildEmbeddingText(text: string, ctx: ChunkContext, headingPath: string): string {
+    const parts: string[] = [];
+    if (ctx.title) parts.push(ctx.title);
+    if (headingPath) parts.push(headingPath);
+    parts.push(text);
+    let out = parts.join(' > ');
+    if (ctx.tags && ctx.tags.length > 0) out += `\n[tags: ${ctx.tags.join(', ')}]`;
+    return out;
+}
+
 export enum ContentType {
     CODE = 'code',
     MARKDOWN = 'markdown',
@@ -31,6 +48,8 @@ interface ParentChunk {
     startPosition: number;
     endPosition: number;
     heading?: string;
+    /** Full heading path when the parent is a document section (markdown). */
+    headingPath?: string;
     contentType: ContentType;
 }
 
@@ -69,7 +88,8 @@ export class IntelligentChunker {
     async createChunks(
         documentId: string,
         content: string,
-        options: ParentChildChunkOptions = {}
+        options: ParentChildChunkOptions = {},
+        context: ChunkContext = {}
     ): Promise<ChunkingResult> {
         const contentType = this.detectContentType(content);
         const opts = this.resolveOptions(contentType, options);
@@ -80,7 +100,10 @@ export class IntelligentChunker {
         );
 
         // Step 1: Split document into large parent chunks
-        const internalParents = this.createParentChunks(content, contentType, opts);
+        const sectionParents = (contentType === ContentType.MARKDOWN || contentType === ContentType.MIXED)
+            ? this.createSectionParents(content, contentType, opts)
+            : null;
+        const internalParents = sectionParents ?? this.createParentChunks(content, contentType, opts);
 
         // Step 2: Build ParentChunkData array for separate storage
         const parentData: ParentChunkData[] = internalParents.map(p => ({
@@ -94,6 +117,7 @@ export class IntelligentChunker {
 
         // Step 3: For each parent, split into small children and generate embeddings
         // Children only store a lightweight reference (parent_index) to their parent.
+        const allHeadings = this.extractHeadings(content);
         const allChildren: DocumentChunk[] = [];
         let globalChildIndex = 0;
 
@@ -111,7 +135,11 @@ export class IntelligentChunker {
                 const globalEnd = globalStart + trimmed.length;
                 if (posInParent >= 0) searchFrom = posInParent + 1;
 
-                const embeddings = await this.embeddingProvider.generateEmbedding(trimmed);
+                const headingPath = parent.headingPath ?? this.findHeadingPathForPosition(allHeadings, globalStart);
+                const leafHeading = headingPath ? headingPath.split(' > ').pop() : parent.heading;
+                const embeddings = await this.embeddingProvider.generateEmbedding(
+                    buildEmbeddingText(trimmed, context, headingPath)
+                );
 
                 allChildren.push({
                     id: `${documentId}_chunk_${globalChildIndex}`,
@@ -124,7 +152,8 @@ export class IntelligentChunker {
                     metadata: {
                         type: parent.contentType,
                         parent_index: parent.index,
-                        heading: parent.heading,
+                        heading: leafHeading,
+                        heading_path: headingPath,
                     }
                 });
                 globalChildIndex++;
@@ -189,6 +218,50 @@ export class IntelligentChunker {
         }
 
         return parents;
+    }
+
+    /**
+     * Section-based parents: one parent per heading section (levels 1-4), so every
+     * child belongs to exactly one section and carries its exact heading path.
+     * Oversized sections are split further but keep the same path.
+     * Returns null when the document has no usable headings.
+     */
+    private createSectionParents(content: string, contentType: ContentType, opts: ResolvedOptions): ParentChunk[] | null {
+        const headings = this.extractHeadings(content).filter(h => h.level <= 4);
+        if (headings.length === 0) return null;
+
+        const bounds = [0, ...headings.map(h => h.position).filter(p => p > 0), content.length];
+        const starts = Array.from(new Set(bounds)).sort((a, b) => a - b);
+        const parents: ParentChunk[] = [];
+        const separators = this.getParentSeparators(contentType);
+
+        for (let i = 0; i < starts.length - 1; i++) {
+            const start = starts[i], end = starts[i + 1];
+            const text = content.slice(start, end);
+            const body = text.replace(/^#{1,6}\s+.*$/m, '').trim();
+            if (!body) continue; // heading with no text of its own (e.g. H1 followed by H2)
+            const path = this.findHeadingPathForPosition(headings, start);
+            const pieces = text.length > opts.parentMaxSize
+                ? this.splitWithSeparators(text, separators, opts.parentMaxSize)
+                : [text];
+            let from = start;
+            for (const piece of pieces) {
+                if (!piece.trim()) continue;
+                const at = content.indexOf(piece.substring(0, Math.min(80, piece.length)), from);
+                const pStart = at >= 0 ? at : from;
+                parents.push({
+                    index: parents.length,
+                    content: piece,
+                    startPosition: pStart,
+                    endPosition: pStart + piece.length,
+                    heading: path ? path.split(' > ').pop() : undefined,
+                    headingPath: path,
+                    contentType,
+                });
+                from = pStart + 1;
+            }
+        }
+        return parents.length > 0 ? parents : null;
     }
 
     // ─── Child Chunk Creation ─────────────────────────────────────────────
@@ -414,16 +487,27 @@ export class IntelligentChunker {
     /**
      * Extract all headings (markdown + HTML) with their positions.
      */
-    private extractHeadings(content: string): Array<{ text: string; position: number }> {
-        const headings: Array<{ text: string; position: number }> = [];
+    private extractHeadings(content: string): Array<{ text: string; position: number; level: number }> {
+        const headings: Array<{ text: string; position: number; level: number }> = [];
+        // Ignore '#' lines inside fenced code blocks (shell comments, etc.)
+        const fences: Array<[number, number]> = [];
+        let open = -1;
+        for (const m of content.matchAll(/^```.*$/gm)) {
+            if (open < 0) open = m.index || 0;
+            else { fences.push([open, (m.index || 0) + m[0].length]); open = -1; }
+        }
+        if (open >= 0) fences.push([open, content.length]);
+        const inFence = (pos: number) => fences.some(([a, b]) => pos >= a && pos < b);
 
         for (const match of content.matchAll(/^(#{1,6})\s+(.+)$/gm)) {
-            headings.push({ text: match[2].trim(), position: match.index || 0 });
+            if (inFence(match.index || 0)) continue;
+            headings.push({ text: match[2].trim(), position: match.index || 0, level: match[1].length });
         }
         for (const match of content.matchAll(/<h([1-6]).*?>(.*?)<\/h[1-6]>/gi)) {
             headings.push({
                 text: match[2].replace(/<[^>]*>/g, '').trim(),
                 position: match.index || 0,
+                level: parseInt(match[1], 10),
             });
         }
 
@@ -443,5 +527,21 @@ export class IntelligentChunker {
             else break;
         }
         return heading;
+    }
+
+    /**
+     * Full heading path ("H1 > H2 > H3") in effect at a position.
+     */
+    private findHeadingPathForPosition(
+        headings: Array<{ text: string; position: number; level: number }>,
+        position: number
+    ): string {
+        const stack: Array<{ text: string; level: number }> = [];
+        for (const h of headings) {
+            if (h.position > position) break;
+            while (stack.length > 0 && stack[stack.length - 1].level >= h.level) stack.pop();
+            stack.push({ text: h.text, level: h.level });
+        }
+        return stack.map(h => h.text).join(' > ');
     }
 }

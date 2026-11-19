@@ -1,0 +1,1029 @@
+{
+  "label": "baseline",
+  "model": "Xenova/paraphrase-multilingual-mpnet-base-v2",
+  "limit": 10,
+  "totals": {
+    "questions": 35,
+    "doc_at_1": 0.37142857142857144,
+    "doc_at_3": 0.5428571428571428,
+    "docsection_at_1": 0.17142857142857143,
+    "docsection_at_3": 0.17142857142857143
+  },
+  "rows": [
+    {
+      "id": "Q01",
+      "query": "cómo se hace un hotfix en front y qué merges necesita",
+      "expectedDoc": "Finutive · front · Proceso de ramas",
+      "expectedSection": "Flujo de hotfix",
+      "docRank": 1,
+      "docSectionRank": null,
+      "doc1": true,
+      "doc3": true,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "Finutive · front · Proceso de ramas",
+          "heading": "5. Ciclo de una épica",
+          "score": 0.6661196655205581
+        },
+        {
+          "title": "2454 gmail cuota · 01 Development plan.md",
+          "heading": "2. Alcance y referencias",
+          "score": 0.547340238660218
+        },
+        {
+          "title": "2454 gmail cuota · 01-05 STORY05.md",
+          "heading": "3. Pruebas automatizadas",
+          "score": 0.5212755715858598
+        }
+      ]
+    },
+    {
+      "id": "Q02",
+      "query": "formato del nombre de una migración Flyway",
+      "expectedDoc": "Finutive · backend · Convenciones Flyway",
+      "expectedSection": "Formato de versión",
+      "docRank": null,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Desarrollo 2442 — Preview inline de facturas recibidas por email (hotfix)",
+          "score": 0.6219754509871838
+        },
+        {
+          "title": "2442 preview facturas · 01-02 STORY02",
+          "heading": "STORY-002 — Corregir las facturas ya guardadas",
+          "score": 0.6203491099822228
+        },
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Perfil de rigor, entornos, worktrees y dependencias",
+          "score": 0.5
+        }
+      ]
+    },
+    {
+      "id": "Q03",
+      "query": "estilos de un componente en Shadow DOM del legacy",
+      "expectedDoc": "Finutive · front react · Integracion con legacy",
+      "expectedSection": "Shadow DOM y gestión de estilos CSS",
+      "docRank": 1,
+      "docSectionRank": 1,
+      "doc1": true,
+      "doc3": true,
+      "sec1": true,
+      "sec3": true,
+      "top3": [
+        {
+          "title": "Finutive · front react · Integracion con legacy",
+          "heading": "6. Shadow DOM y gestión de estilos CSS",
+          "score": 0.8506283964963546
+        },
+        {
+          "title": "Finutive · front react · Arquitectura",
+          "heading": "2. Estructura del proyecto",
+          "score": 0.7483164243580108
+        },
+        {
+          "title": "Finutive · front react · Arquitectura",
+          "heading": "Paso 3bis — Vista full-bleed (fondo propio en toda el área de contenido)",
+          "score": 0.6521437812870834
+        }
+      ]
+    },
+    {
+      "id": "Q04",
+      "query": "qué merges de una épica necesitan Merge Request",
+      "expectedDoc": "Finutive · front · Proceso de ramas",
+      "expectedSection": "Qué merge necesita Merge Request",
+      "docRank": 1,
+      "docSectionRank": null,
+      "doc1": true,
+      "doc3": true,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "Finutive · front · Proceso de ramas",
+          "heading": "5. Ciclo de una épica",
+          "score": 0.750478974093219
+        },
+        {
+          "title": "2454 gmail cuota · 01-03 STORY03.md",
+          "heading": "0. Contexto y objetivos",
+          "score": 0.6616912024372068
+        },
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Perfil de rigor, entornos, worktrees y dependencias",
+          "score": 0.49446986784314706
+        }
+      ]
+    },
+    {
+      "id": "Q05",
+      "query": "qué prefijo de rama se usa para un BUG según la Tipología de Notion",
+      "expectedDoc": "Finutive · front · Proceso de ramas",
+      "expectedSection": "Nomenclatura",
+      "docRank": 1,
+      "docSectionRank": null,
+      "doc1": true,
+      "doc3": true,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "Finutive · front · Proceso de ramas",
+          "heading": "Proceso de ramas y desarrollo de épicas",
+          "score": 0.5
+        },
+        {
+          "title": "Finutive · front · Proceso de ramas",
+          "heading": "8. Resumen de invariantes",
+          "score": 0.48509573993163135
+        },
+        {
+          "title": "Finutive · backend · README",
+          "heading": "Entornos",
+          "score": 0.4731793371924439
+        }
+      ]
+    },
+    {
+      "id": "Q06",
+      "query": "por qué se usan 12 dígitos y no 14 en las versiones de Flyway",
+      "expectedDoc": "Finutive · backend · Convenciones Flyway",
+      "expectedSection": "Por qué 12 y no 14",
+      "docRank": null,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "Finutive · backend · README",
+          "heading": "Finutive Backend",
+          "score": 0.5
+        },
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Perfil de rigor, entornos, worktrees y dependencias",
+          "score": 0.4834826092692522
+        },
+        {
+          "title": "2454 gmail cuota · 01 Development plan.md",
+          "heading": "4. Decisiones y riesgos compartidos",
+          "score": 0.4188777561837342
+        }
+      ]
+    },
+    {
+      "id": "Q07",
+      "query": "puedo crear un índice CONCURRENTLY en el mismo script de migración",
+      "expectedDoc": "Finutive · backend · Convenciones Flyway",
+      "expectedSection": "Checklist al crear una migración",
+      "docRank": null,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "Finutive · front react · Arquitectura",
+          "heading": "4. API pública del shell",
+          "score": 0.5
+        },
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Perfil de rigor, entornos, worktrees y dependencias",
+          "score": 0.47466974300648906
+        },
+        {
+          "title": "Finutive · front react · Despliegue",
+          "heading": "Guía de despliegue — `finutive-front-react`",
+          "score": 0.3558733718883366
+        }
+      ]
+    },
+    {
+      "id": "Q08",
+      "query": "en qué carpeta va una migración del datasource global",
+      "expectedDoc": "Finutive · backend · Convenciones Flyway",
+      "expectedSection": "Ubicaciones",
+      "docRank": 2,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": true,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "Finutive · local · Runbook entorno OCR",
+          "heading": "Entorno OCR local: runbook de recreación",
+          "score": 0.8398410774916861
+        },
+        {
+          "title": "Finutive · backend · Convenciones Flyway",
+          "heading": "Convenciones Flyway (backend)",
+          "score": 0.7874058978008516
+        },
+        {
+          "title": "2454 gmail cuota · 01-02 STORY02.md",
+          "heading": "STORY-002 · Backoff por OVERQUOTA",
+          "score": 0.6629351797035351
+        }
+      ]
+    },
+    {
+      "id": "Q09",
+      "query": "las migraciones de índices CONCURRENTLY no terminan en local, qué hago",
+      "expectedDoc": "Finutive · backend · README",
+      "expectedSection": "Flyway: dos migraciones",
+      "docRank": 2,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": true,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Desarrollo 2442 — Preview inline de facturas recibidas por email (hotfix)",
+          "score": 0.5482228519657777
+        },
+        {
+          "title": "Finutive · backend · README",
+          "heading": "Finutive Backend",
+          "score": 0.5
+        },
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Perfil de rigor, entornos, worktrees y dependencias",
+          "score": 0.47646184673356107
+        }
+      ]
+    },
+    {
+      "id": "Q10",
+      "query": "V202607241201 índice verifactu_record business_cif previous_hash",
+      "expectedDoc": "Finutive · backend · README",
+      "expectedSection": "Flyway: dos migraciones",
+      "docRank": 1,
+      "docSectionRank": null,
+      "doc1": true,
+      "doc3": true,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "Finutive · backend · README",
+          "heading": "Ejecutar el backend",
+          "score": 0.5
+        },
+        {
+          "title": "2442 preview facturas · 01 Runbook publicacion hotfix",
+          "heading": "9. Pruebas y pendientes",
+          "score": 0.16039374333856762
+        },
+        {
+          "title": "2442 preview facturas · 01-02 STORY02",
+          "heading": "Datos técnicos (validación 2026-11-17)",
+          "score": 0.14423796581649592
+        }
+      ]
+    },
+    {
+      "id": "Q11",
+      "query": "cómo lanzar el proxy HTTPS local con local-ssl-proxy",
+      "expectedDoc": "Finutive · backend · LocalInstall",
+      "expectedSection": "Proxy HTTPS local",
+      "docRank": 1,
+      "docSectionRank": null,
+      "doc1": true,
+      "doc3": true,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "Finutive · backend · LocalInstall",
+          "heading": "DESARROLLO CON FRONT EN LOCAL",
+          "score": null
+        },
+        {
+          "title": "Finutive · local · Runbook entorno OCR",
+          "heading": "Entorno OCR local: runbook de recreación",
+          "score": null
+        },
+        {
+          "title": "Finutive · backend · Convenciones Flyway",
+          "heading": "Convenciones Flyway (backend)",
+          "score": null
+        }
+      ]
+    },
+    {
+      "id": "Q12",
+      "query": "en qué orden se ejecuta el backfill de threading legacy de Global",
+      "expectedDoc": "Finutive · global · README",
+      "expectedSection": "Backfill de threading legacy",
+      "docRank": 3,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": true,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2454 gmail cuota · 01-02 STORY02.md",
+          "heading": "STORY-002 · Backoff por OVERQUOTA",
+          "score": 0.6675239238756967
+        },
+        {
+          "title": "2447 falso positivo correo ilegible · 01-01 STORY01.md",
+          "heading": "Operación, despliegue y recuperación",
+          "score": 0.5983974757585984
+        },
+        {
+          "title": "Finutive · global · README",
+          "heading": "📦 Resumen de despliegue",
+          "score": 0.5
+        }
+      ]
+    },
+    {
+      "id": "Q13",
+      "query": "error AUTHENTICATIONFAILED en el buzón IMAP, qué App Password",
+      "expectedDoc": "Finutive · global · README",
+      "expectedSection": "Troubleshooting",
+      "docRank": null,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2454 gmail cuota · 01-02 STORY02.md",
+          "heading": "STORY-002 · Backoff por OVERQUOTA",
+          "score": 0.5932064081270885
+        },
+        {
+          "title": "2454 gmail cuota · 01-05 STORY05.md",
+          "heading": "3. Pruebas automatizadas",
+          "score": 0.5
+        },
+        {
+          "title": "Finutive · backend · README",
+          "heading": "Instalación local",
+          "score": 0.4951210763543384
+        }
+      ]
+    },
+    {
+      "id": "Q14",
+      "query": "pasos para dar de alta una instancia nueva en el microservicio de comunicaciones",
+      "expectedDoc": "Finutive · global · README",
+      "expectedSection": "Onboarding de instancia nueva",
+      "docRank": 6,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Perfil de rigor, entornos, worktrees y dependencias",
+          "score": 0.5
+        },
+        {
+          "title": "Finutive · backend · README",
+          "heading": "Finutive Backend",
+          "score": 0.3299337186892264
+        },
+        {
+          "title": "2454 gmail cuota · 01-04 STORY04.md",
+          "heading": "0. Contexto y objetivos",
+          "score": 0.32345212144254154
+        }
+      ]
+    },
+    {
+      "id": "Q15",
+      "query": "variables CI/CD de GitLab necesarias para desplegar finutive-front-react",
+      "expectedDoc": "Finutive · front react · Despliegue",
+      "expectedSection": "Paso 1",
+      "docRank": 7,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "Finutive · front · Proceso de ramas",
+          "heading": "5. Ciclo de una épica",
+          "score": 0.5990153935380607
+        },
+        {
+          "title": "2442 preview facturas · 01-02 STORY02",
+          "heading": "Anexo. Historial de versiones",
+          "score": 0.5677187137214006
+        },
+        {
+          "title": "2442 preview facturas · 01 Runbook publicacion hotfix",
+          "heading": "Anexo. Historial de versiones",
+          "score": 0.5618663820663206
+        }
+      ]
+    },
+    {
+      "id": "Q16",
+      "query": "el pod da ImagePullBackOff, cuál es la causa probable",
+      "expectedDoc": "Finutive · front react · Despliegue",
+      "expectedSection": "Diagnóstico rápido",
+      "docRank": null,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2454 gmail cuota · 01-03 STORY03.md",
+          "heading": "1. Criterios de aceptación",
+          "score": 0.50947288569124
+        },
+        {
+          "title": "Finutive · front react · Arquitectura",
+          "heading": "Catálogo de componentes",
+          "score": 0.5
+        },
+        {
+          "title": "Finutive · backend · LocalInstall",
+          "heading": "DESARROLLO CON FRONT EN LOCAL",
+          "score": 0.3681144859442892
+        }
+      ]
+    },
+    {
+      "id": "Q17",
+      "query": "actualizar el ConfigMap del legacy con REACT_SHELL_URL",
+      "expectedDoc": "Finutive · front react · Despliegue",
+      "expectedSection": "Paso 3",
+      "docRank": 7,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "Finutive · front legacy · Guia de desarrollo",
+          "heading": "Finutive Front - Claude Code Guide",
+          "score": null
+        },
+        {
+          "title": "Finutive · front react · Integracion con legacy",
+          "heading": "Guía de integración React ↔ Legacy jQuery",
+          "score": null
+        },
+        {
+          "title": "2454 gmail cuota · 01-03 STORY03.md",
+          "heading": "2. Diseño mínimo y cambios",
+          "score": null
+        }
+      ]
+    },
+    {
+      "id": "Q18",
+      "query": "precauciones al arrancar el entorno OCR local con schedulers",
+      "expectedDoc": "Finutive · local · Runbook entorno OCR",
+      "expectedSection": "Precauciones de arranque",
+      "docRank": 1,
+      "docSectionRank": 1,
+      "doc1": true,
+      "doc3": true,
+      "sec1": true,
+      "sec3": true,
+      "top3": [
+        {
+          "title": "Finutive · local · Runbook entorno OCR",
+          "heading": "Precauciones de arranque",
+          "score": null
+        },
+        {
+          "title": "Finutive · local · Runbook entorno OCR",
+          "heading": "Entorno OCR local: runbook de recreación",
+          "score": null
+        },
+        {
+          "title": "Finutive · backend · Convenciones Flyway",
+          "heading": "Convenciones Flyway (backend)",
+          "score": null
+        }
+      ]
+    },
+    {
+      "id": "Q19",
+      "query": "flags REACT_SIDEBAR_ENABLED en config.js del legacy",
+      "expectedDoc": "Finutive · front react · Integracion con legacy",
+      "expectedSection": "Flags de activación",
+      "docRank": 1,
+      "docSectionRank": null,
+      "doc1": true,
+      "doc3": true,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "Finutive · front react · Integracion con legacy",
+          "heading": "Guía de integración React ↔ Legacy jQuery",
+          "score": 1
+        },
+        {
+          "title": "Finutive · front react · Integracion con legacy",
+          "heading": "3. Tipo A — Componente embebido en el chrome del legacy (Sidebar)",
+          "score": 0.6889965465065384
+        },
+        {
+          "title": "Finutive · front react · Arquitectura",
+          "heading": "`supervision-sidebar-nav/` — sidebar Backoffice",
+          "score": 0.6205397476653711
+        }
+      ]
+    },
+    {
+      "id": "Q20",
+      "query": "cómo registrar un nuevo punto de montaje en embed.jsx",
+      "expectedDoc": "Finutive · front react · Integracion con legacy",
+      "expectedSection": "Paso 2",
+      "docRank": 3,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": true,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "Finutive · front react · Arquitectura",
+          "heading": "4. API pública del shell",
+          "score": 0.5
+        },
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Perfil de rigor, entornos, worktrees y dependencias",
+          "score": 0.45966534661410274
+        },
+        {
+          "title": "Finutive · front react · Integracion con legacy",
+          "heading": "9. Referencia rápida de la API pública",
+          "score": 0.36808272281253235
+        }
+      ]
+    },
+    {
+      "id": "Q21",
+      "query": "comandos de desarrollo de finutive-front-react npm run storybook",
+      "expectedDoc": "Finutive · front react · Guia de desarrollo",
+      "expectedSection": "Comandos de Desarrollo",
+      "docRank": 4,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Perfil de rigor, entornos, worktrees y dependencias",
+          "score": 0.9601897651207492
+        },
+        {
+          "title": "Finutive · front react · Arquitectura",
+          "heading": "2. Estructura del proyecto",
+          "score": 0.828572046674211
+        },
+        {
+          "title": "Finutive · front react · Integracion con legacy",
+          "heading": "7. Modo standalone: trabajar en React sin el legacy",
+          "score": 0.7230533965443365
+        }
+      ]
+    },
+    {
+      "id": "Q22",
+      "query": "qué builds hay que lanzar antes de commitear en el front legacy",
+      "expectedDoc": "Finutive · front legacy · Guia de desarrollo",
+      "expectedSection": "Disparadores de Build",
+      "docRank": null,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "Finutive · front react · Arquitectura",
+          "heading": "2. Estructura del proyecto",
+          "score": 0.5399424051427212
+        },
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Perfil de rigor, entornos, worktrees y dependencias",
+          "score": 0.5
+        },
+        {
+          "title": "2447 falso positivo correo ilegible · 01 Development plan.md",
+          "heading": "Decisiones, riesgos y preguntas abiertas",
+          "score": 0.39121063654726895
+        }
+      ]
+    },
+    {
+      "id": "Q23",
+      "query": "cómo liberar un bloqueo huérfano del hotfix 2442 cuando POST /run da 409",
+      "expectedDoc": "2442 preview facturas · 01 Runbook publicacion hotfix",
+      "expectedSection": "Liberar un bloqueo huérfano",
+      "docRank": 7,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Desarrollo 2442 — Preview inline de facturas recibidas por email (hotfix)",
+          "score": 0.5789106102583055
+        },
+        {
+          "title": "2447 falso positivo correo ilegible · 01 Development plan.md",
+          "heading": "Decisiones, riesgos y preguntas abiertas",
+          "score": 0.529711599977804
+        },
+        {
+          "title": "2454 gmail cuota · 01-03 STORY03.md",
+          "heading": "4. Pruebas manuales",
+          "score": 0.5206701573130785
+        }
+      ]
+    },
+    {
+      "id": "Q24",
+      "query": "precedencia de parámetros MULTIMEDIA_FIX_2442 entre petición, variable de entorno y application.yml",
+      "expectedDoc": "2442 preview facturas · 01 Runbook publicacion hotfix",
+      "expectedSection": "Precedencia de los parámetros",
+      "docRank": 2,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": true,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Anexo. Historial de versiones",
+          "score": 0.6182107738489333
+        },
+        {
+          "title": "2442 preview facturas · 01 Runbook publicacion hotfix",
+          "heading": "9. Pruebas y pendientes",
+          "score": 0.5970320156903379
+        },
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Riesgos y decisiones",
+          "score": 0.5875830301993006
+        }
+      ]
+    },
+    {
+      "id": "Q25",
+      "query": "por qué la migración del hotfix 2442 pasa a la versión 202611191000",
+      "expectedDoc": "2442 preview facturas · 01 Runbook publicacion hotfix",
+      "expectedSection": "Qué cambia",
+      "docRank": 7,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Desarrollo 2442 — Preview inline de facturas recibidas por email (hotfix)",
+          "score": 0.8034961029783023
+        },
+        {
+          "title": "2454 gmail cuota · 01-03 STORY03.md",
+          "heading": "4. Pruebas manuales",
+          "score": 0.6485005880583764
+        },
+        {
+          "title": "2447 falso positivo correo ilegible · 01 Development plan.md",
+          "heading": "Decisiones, riesgos y preguntas abiertas",
+          "score": 0.6056917255625724
+        }
+      ]
+    },
+    {
+      "id": "Q26",
+      "query": "backoff creciente 15 30 60 120 240 minutos cuando Gmail da OVERQUOTA",
+      "expectedDoc": "2454 gmail cuota · 01-02 STORY02.md",
+      "expectedSection": "Contexto y objetivos",
+      "docRank": 5,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2454 gmail cuota · 01 Development plan.md",
+          "heading": "1.1 Funcionamiento actual del sondeo del buzón",
+          "score": 0.7571709961228261
+        },
+        {
+          "title": "2454 gmail cuota · 01 Development plan.md",
+          "heading": "1. Contexto y objetivos",
+          "score": 0.702145863309634
+        },
+        {
+          "title": "2454 gmail cuota · 01-03 STORY03.md",
+          "heading": "4. Pruebas manuales",
+          "score": 0.5163767072340965
+        }
+      ]
+    },
+    {
+      "id": "Q27",
+      "query": "max-reconnects-per-cycle presupuesto de reconexiones IMAP y borrado diario",
+      "expectedDoc": "2454 gmail cuota · 01-03 STORY03.md",
+      "expectedSection": "Contexto y objetivos",
+      "docRank": 1,
+      "docSectionRank": 1,
+      "doc1": true,
+      "doc3": true,
+      "sec1": true,
+      "sec3": true,
+      "top3": [
+        {
+          "title": "2454 gmail cuota · 01-03 STORY03.md",
+          "heading": "0. Contexto y objetivos",
+          "score": 0.7762276901662245
+        },
+        {
+          "title": "2454 gmail cuota · 01 Development plan.md",
+          "heading": "1.1 Funcionamiento actual del sondeo del buzón",
+          "score": 0.6864738561176109
+        },
+        {
+          "title": "2454 gmail cuota · 01-05 STORY05.md",
+          "heading": "0. Contexto y objetivos",
+          "score": 0.6841941391271349
+        }
+      ]
+    },
+    {
+      "id": "Q28",
+      "query": "ticket 2447 FolderClosedException relectura fallida de un correo ya despachado",
+      "expectedDoc": "2447 falso positivo correo ilegible · 01-01 STORY01.md",
+      "expectedSection": "Resumen",
+      "docRank": 4,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2447 falso positivo correo ilegible · 01 Development plan.md",
+          "heading": "Decisiones, riesgos y preguntas abiertas",
+          "score": 0.9527453174579583
+        },
+        {
+          "title": "2454 gmail cuota · 01-03 STORY03.md",
+          "heading": "3. Pruebas automatizadas",
+          "score": 0.775300392695877
+        },
+        {
+          "title": "2447 falso positivo correo ilegible · 01 Development plan.md",
+          "heading": "Ticket 2447 — Comunicaciones: falso positivo de «correo ilegible» por `FolderClosedException` — Plan de desarrollo",
+          "score": 0.7520711646945202
+        }
+      ]
+    },
+    {
+      "id": "Q29",
+      "query": "reintento único de la lectura de cabeceras ante corte de conexión Sentry GLOBAL-N",
+      "expectedDoc": "2454 gmail cuota · 01-05 STORY05.md",
+      "expectedSection": "Contexto y objetivos",
+      "docRank": 4,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2454 gmail cuota · 01 Development plan.md",
+          "heading": "2. Alcance y referencias",
+          "score": 0.6907005837867125
+        },
+        {
+          "title": "2447 falso positivo correo ilegible · 01-01 STORY01.md",
+          "heading": "Operación, despliegue y recuperación",
+          "score": 0.6716695078086593
+        },
+        {
+          "title": "2454 gmail cuota · 01-03 STORY03.md",
+          "heading": "4. Pruebas manuales",
+          "score": 0.6528927965216178
+        }
+      ]
+    },
+    {
+      "id": "Q30",
+      "query": "tabla diario multimedia_fix_2442_affected para corregir las facturas ya guardadas",
+      "expectedDoc": "2442 preview facturas · 01-02 STORY02",
+      "expectedSection": "Forma de aplicación",
+      "docRank": 1,
+      "docSectionRank": 1,
+      "doc1": true,
+      "doc3": true,
+      "sec1": true,
+      "sec3": true,
+      "top3": [
+        {
+          "title": "2442 preview facturas · 01-02 STORY02",
+          "heading": "Forma de aplicación (Rev03 y Rev05, [DEC-FPM-010](01%20Development%20plan.md#dec-fpm-010))",
+          "score": 0.5926665990963118
+        },
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Impacto conocido del cambio",
+          "score": 0.5808221720486921
+        },
+        {
+          "title": "2442 preview facturas · 01-02 STORY02",
+          "heading": "Datos técnicos (validación 2026-11-17)",
+          "score": 0.5550787637541266
+        }
+      ]
+    },
+    {
+      "id": "Q31",
+      "query": "aislamiento css shadow dom adoptedStyleSheets en react",
+      "expectedDoc": "Finutive · front react · Arquitectura",
+      "expectedSection": "Shadow DOM y aislamiento CSS",
+      "docRank": 1,
+      "docSectionRank": 1,
+      "doc1": true,
+      "doc3": true,
+      "sec1": true,
+      "sec3": true,
+      "top3": [
+        {
+          "title": "Finutive · front react · Arquitectura",
+          "heading": "5. Shadow DOM y aislamiento CSS",
+          "score": 0.9758610657313578
+        },
+        {
+          "title": "Finutive · front react · Integracion con legacy",
+          "heading": "6. Shadow DOM y gestión de estilos CSS",
+          "score": 0.8116429913599341
+        },
+        {
+          "title": "Finutive · front react · Integracion con legacy",
+          "heading": "5. Añadir un nuevo punto de montaje",
+          "score": 0.7025283016881241
+        }
+      ]
+    },
+    {
+      "id": "Q32",
+      "query": "como se nombra la rama de un hotfix sin epica",
+      "expectedDoc": "Finutive · front · Proceso de ramas",
+      "expectedSection": "Nomenclatura",
+      "docRank": 2,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": true,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Perfil de rigor, entornos, worktrees y dependencias",
+          "score": 0.5
+        },
+        {
+          "title": "Finutive · front · Proceso de ramas",
+          "heading": "Proceso de ramas y desarrollo de épicas",
+          "score": 0.4225901801101525
+        },
+        {
+          "title": "Finutive · front · Proceso de ramas",
+          "heading": "8. Resumen de invariantes",
+          "score": 0.3992088737217062
+        }
+      ]
+    },
+    {
+      "id": "Q33",
+      "query": "cuantos digitos lleva el timestamp de una migracion de base de datos",
+      "expectedDoc": "Finutive · backend · Convenciones Flyway",
+      "expectedSection": "Formato de versión",
+      "docRank": null,
+      "docSectionRank": null,
+      "doc1": false,
+      "doc3": false,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2454 gmail cuota · 01-02 STORY02.md",
+          "heading": "STORY-002 · Backoff por OVERQUOTA",
+          "score": 0.6314051866314888
+        },
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Perfil de rigor, entornos, worktrees y dependencias",
+          "score": 0.5
+        },
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Riesgos y decisiones",
+          "score": 0.34199838374050756
+        }
+      ]
+    },
+    {
+      "id": "Q34",
+      "query": "2442 mapa de historias preview facturas",
+      "expectedDoc": "2442 preview facturas · 01 Development plan",
+      "expectedSection": "Mapa de historias",
+      "docRank": 1,
+      "docSectionRank": null,
+      "doc1": true,
+      "doc3": true,
+      "sec1": false,
+      "sec3": false,
+      "top3": [
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Desarrollo 2442 — Preview inline de facturas recibidas por email (hotfix)",
+          "score": 0.8998832956476799
+        },
+        {
+          "title": "2442 preview facturas · 01-02 STORY02",
+          "heading": "STORY-002 — Corregir las facturas ya guardadas",
+          "score": 0.6018071432035073
+        },
+        {
+          "title": "2442 preview facturas · 01 Development plan",
+          "heading": "Perfil de rigor, entornos, worktrees y dependencias",
+          "score": 0.5
+        }
+      ]
+    },
+    {
+      "id": "Q35",
+      "query": "2454 decisiones y riesgos compartidos del plan de cuota de Gmail",
+      "expectedDoc": "2454 gmail cuota · 01 Development plan.md",
+      "expectedSection": "Decisiones y riesgos compartidos",
+      "docRank": 1,
+      "docSectionRank": 1,
+      "doc1": true,
+      "doc3": true,
+      "sec1": true,
+      "sec3": true,
+      "top3": [
+        {
+          "title": "2454 gmail cuota · 01 Development plan.md",
+          "heading": "4. Decisiones y riesgos compartidos",
+          "score": 0.8664905409214336
+        },
+        {
+          "title": "2454 gmail cuota · 01-03 STORY03.md",
+          "heading": "4. Pruebas manuales",
+          "score": 0.6114513126815961
+        },
+        {
+          "title": "2454 gmail cuota · 01-02 STORY02.md",
+          "heading": "STORY-002 · Backoff por OVERQUOTA",
+          "score": 0.5868294048645962
+        }
+      ]
+    }
+  ]
+}

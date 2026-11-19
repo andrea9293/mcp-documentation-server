@@ -1,11 +1,19 @@
 import { create, insert, remove, search, save, load, count, getByID } from '@orama/orama';
 import type { AnyOrama, Results } from '@orama/orama';
 import { persistToFile, restoreFromFile } from '@orama/plugin-data-persistence/server';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { readdir, readFile } from 'fs/promises';
 import * as path from 'path';
 import { Document, DocumentChunk, SearchResult, OramaChunkDocument, OramaDocDocument, OramaParentDocument, ParentChunkData } from './types.js';
 import { getDefaultDataDir } from './utils.js';
+import { createSpanishTokenizer, TOKENIZER_VERSION } from './tokenizer.js';
+
+function cosine(a: ArrayLike<number>, b?: ArrayLike<number>): number | undefined {
+    if (!b || a.length !== b.length) return undefined;
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+    return na && nb ? dot / Math.sqrt(na * nb) : undefined;
+}
 
 /**
  * OramaStore: manages two Orama DB instances (chunks + documents) with persistence to disk.
@@ -19,8 +27,13 @@ export class OramaStore {
     private docsDbPath: string;
     private parentsDbPath: string;
     private migrationFlagPath: string;
+    private indexVersionPath: string;
     private vectorDimensions: number;
     private initialized = false;
+    /** True when the restored chunks DB uses an older schema and must be rebuilt. */
+    needsReindex = false;
+    /** True while a multi-step write (reindex / atomic replace) must not hit the disk. */
+    private batch = false;
 
     constructor(vectorDimensions: number) {
         const baseDir = getDefaultDataDir();
@@ -29,6 +42,7 @@ export class OramaStore {
         this.docsDbPath = path.join(this.dataDir, 'orama-docs.msp');
         this.parentsDbPath = path.join(this.dataDir, 'orama-parents.msp');
         this.migrationFlagPath = path.join(this.dataDir, 'migration-complete.flag');
+        this.indexVersionPath = path.join(this.dataDir, 'index-version.json');
         this.vectorDimensions = vectorDimensions;
 
         if (!existsSync(this.dataDir)) {
@@ -98,6 +112,15 @@ export class OramaStore {
             console.error('[OramaStore] Created new parents DB');
         }
 
+        // Detect an outdated chunks schema (pre heading_path): needs a reindex
+        if (restoredChunks) {
+            const sch = (this.chunksDb as any)?.schema;
+            if (sch && !('heading_path' in sch)) this.needsReindex = true;
+            if (this.readIndexVersion() !== TOKENIZER_VERSION) this.needsReindex = true;
+            // restoreFromFile builds the DB with the default tokenizer: swap in ours
+            if (this.chunksDb) (this.chunksDb as any).tokenizer = createSpanishTokenizer();
+        }
+
         this.initialized = true;
 
         console.error(`[OramaStore] Initialization finished. vectorDimensions=${this.vectorDimensions}`);
@@ -112,17 +135,70 @@ export class OramaStore {
      */
     private createChunksDb(): AnyOrama {
         return create({
+            components: { tokenizer: createSpanishTokenizer() },
             schema: {
                 document_id: 'string',
                 document_title: 'string',
                 chunk_index: 'number',
                 content: 'string',
+                heading_path: 'string',
                 embedding: `vector[${this.vectorDimensions}]` as `vector[${number}]`,
                 start_position: 'number',
                 end_position: 'number',
                 metadata: 'string',
             },
         });
+    }
+
+    /**
+     * Drop chunks and parents (after backing up the old files) so every document
+     * can be re-chunked with the current schema. Documents DB is kept.
+     */
+    async resetChunkIndexes(): Promise<void> {
+        const { copyFile } = await import('fs/promises');
+        for (const f of [this.chunksDbPath, this.parentsDbPath]) {
+            if (existsSync(f)) await copyFile(f, `${f}.bak-pre-reindex`);
+        }
+        this.chunksDb = this.createChunksDb();
+        this.parentsDb = this.createParentsDb();
+        // Nothing is persisted (and needsReindex stays true) until commitReindex(), so an
+        // interrupted reindex is simply retried on the next start and never loses documents.
+        this.batch = true;
+    }
+
+    /** Insert chunks and parents of a document during a reindex (document record is kept). */
+    async addChunksOnly(doc: Document, parents: ParentChunkData[]): Promise<void> {
+        await this.addDocumentInternal(doc, false);
+        await this.addParents(doc.id, parents);
+    }
+
+    /** Finish a reindex: write everything to disk at once and mark the index as current. */
+    async commitReindex(): Promise<void> {
+        this.batch = false;
+        this.needsReindex = false;
+        await this.persistToDisk();
+    }
+
+    /**
+     * Atomically replace a document (record, chunks, parents). The slow work (chunking and
+     * embedding) must be done by the caller beforehand; on failure memory is reloaded from
+     * disk, which still holds the previous version.
+     */
+    async replaceDocument(doc: Document, parents: ParentChunkData[]): Promise<void> {
+        if (!this.initialized) await this.initialize();
+        this.batch = true;
+        try {
+            await this.deleteDocument(doc.id);
+            await this.addDocumentInternal(doc);
+            if (parents.length > 0) await this.addParents(doc.id, parents);
+        } catch (error) {
+            this.batch = false;
+            this.initialized = false;
+            await this.initialize();
+            throw error;
+        }
+        this.batch = false;
+        await this.persistToDisk();
     }
 
     /**
@@ -157,10 +233,21 @@ export class OramaStore {
         });
     }
 
+    private readIndexVersion(): string | null {
+        try {
+            return JSON.parse(readFileSync(this.indexVersionPath, 'utf-8')).tokenizer ?? null;
+        } catch {
+            return null;
+        }
+    }
+
     /**
      * Persist all DBs to disk
      */
     private async persistToDisk(): Promise<void> {
+        // While a batch (reindex / atomic replace) is in progress nothing is written:
+        // the on-disk state only changes once the whole operation succeeded.
+        if (this.batch) return;
         try {
             if (this.chunksDb) {
                 await persistToFile(this.chunksDb, 'binary', this.chunksDbPath, 'node');
@@ -170,6 +257,9 @@ export class OramaStore {
             }
             if (this.parentsDb) {
                 await persistToFile(this.parentsDb, 'binary', this.parentsDbPath, 'node');
+            }
+            if (!this.needsReindex) {
+                writeFileSync(this.indexVersionPath, JSON.stringify({ tokenizer: TOKENIZER_VERSION }));
             }
             console.error('[OramaStore] Persisted DBs to disk');
         } catch (error) {
@@ -229,12 +319,12 @@ export class OramaStore {
      * Internal method to add a full Document (with chunks) to both DBs.
      * Used by migration and by addDocument.
      */
-    private async addDocumentInternal(doc: Document): Promise<void> {
+    private async addDocumentInternal(doc: Document, withRecord = true): Promise<void> {
         if (!this.docsDb || !this.chunksDb) throw new Error('OramaStore not initialized');
 
         console.error(`[OramaStore] Inserting document ${doc.id} (${doc.title}) with ${doc.chunks?.length || 0} chunks`);
         // Insert into docs DB
-        await insert(this.docsDb, {
+        if (withRecord) await insert(this.docsDb, {
             id: doc.id,
             title: doc.title,
             content: doc.content,
@@ -258,6 +348,7 @@ export class OramaStore {
                 document_title: doc.title,
                 chunk_index: chunk.chunk_index,
                 content: chunk.content,
+                heading_path: String(chunk.metadata?.heading_path || ''),
                 embedding,
                 start_position: chunk.start_position,
                 end_position: chunk.end_position,
@@ -449,6 +540,24 @@ export class OramaStore {
     }
 
     /**
+     * Lightweight index of all documents (id, title, metadata); no chunks.
+     */
+    async listDocumentIndex(): Promise<Array<{ id: string; title: string; metadata: Record<string, any>; created_at: string; updated_at: string }>> {
+        if (!this.initialized) await this.initialize();
+        if (!this.docsDb) return [];
+        const total = count(this.docsDb);
+        if (total === 0) return [];
+        const result = await search(this.docsDb, { term: '', limit: total, threshold: 0 }) as Results<OramaDocDocument>;
+        return result.hits.map(h => ({
+            id: h.document.id,
+            title: h.document.title,
+            metadata: this.safeJsonParse(h.document.metadata),
+            created_at: h.document.created_at,
+            updated_at: h.document.updated_at,
+        }));
+    }
+
+    /**
      * Get all documents (metadata only, no embeddings)
      */
     async getAllDocuments(): Promise<Document[]> {
@@ -508,10 +617,10 @@ export class OramaStore {
                         value: embedding,
                         property: 'embedding',
                     },
-                    properties: ['content', 'document_title'],
+                    properties: ['content', 'document_title', 'heading_path'],
                     similarity: 0.5,
                     limit,
-                    includeVectors: false,
+                    includeVectors: true,
                 };
                 if (documentId) {
                     searchParams.where = { document_id: documentId };
@@ -526,7 +635,7 @@ export class OramaStore {
                     },
                     similarity: 0.5,
                     limit,
-                    includeVectors: false,
+                    includeVectors: true,
                 };
                 if (documentId) {
                     searchParams.where = { document_id: documentId };
@@ -545,6 +654,7 @@ export class OramaStore {
                     metadata: this.safeJsonParse(hit.document.metadata),
                 } as DocumentChunk,
                 score: hit.score,
+                similarity: this.hitSimilarity(embedding, hit),
             }));
         } catch (error) {
             console.error('[OramaStore] Error searching chunks:', error);
@@ -571,10 +681,10 @@ export class OramaStore {
                         value: embedding,
                         property: 'embedding',
                     },
-                    properties: ['content', 'document_title'],
+                    properties: ['content', 'document_title', 'heading_path'],
                     similarity: 0.5,
                     limit,
-                    includeVectors: false,
+                    includeVectors: true,
                 } as any) as Results<OramaChunkDocument>;
             } else {
                 // Pure vector search
@@ -586,7 +696,7 @@ export class OramaStore {
                     },
                     similarity: 0.5,
                     limit,
-                    includeVectors: false,
+                    includeVectors: true,
                 } as any) as Results<OramaChunkDocument>;
             }
 
@@ -601,6 +711,7 @@ export class OramaStore {
                     metadata: this.safeJsonParse(hit.document.metadata),
                 } as DocumentChunk,
                 score: hit.score,
+                similarity: this.hitSimilarity(embedding, hit),
             }));
         } catch (error) {
             console.error('[OramaStore] Error in searchAllDocuments:', error);
@@ -652,5 +763,18 @@ export class OramaStore {
         } catch {
             return {};
         }
+    }
+
+    /**
+     * Cosine similarity between the query and a hit. Uses the vector returned with the hit and,
+     * when the search did not return it, reads it from the stored document, so the reliability
+     * signal never silently degrades to 0.
+     */
+    private hitSimilarity(queryEmbedding: number[], hit: { id: string; document: any }): number | undefined {
+        let vec = hit.document?.embedding;
+        if (!vec && this.chunksDb) {
+            try { vec = (getByID(this.chunksDb, hit.id) as any)?.embedding; } catch { /* ignore */ }
+        }
+        return cosine(queryEmbedding, vec);
     }
 }

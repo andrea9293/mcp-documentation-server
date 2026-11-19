@@ -8,6 +8,7 @@ import { IntelligentChunker } from './intelligent-chunker.js';
 import { extractText } from 'unpdf';
 import { getDefaultDataDir } from './utils.js';
 import { OramaStore } from './orama-store.js';
+import { SearchFilters, deriveDocument, hasFilters, matchesFilters } from './metadata-utils.js';
 import { GeminiFileMappingService } from './gemini-file-mapping-service.js';
 
 /**
@@ -53,6 +54,9 @@ export class DocumentManager {
             console.error('[DocumentManager] Initializing OramaStore...');
             await this.oramaStore.initialize();
             this.oramaInitialized = true;
+            if (this.oramaStore.needsReindex) {
+                await this.reindexAll();
+            }
             console.error('[DocumentManager] OramaStore initialized');
         }
     }
@@ -86,17 +90,85 @@ export class DocumentManager {
         return path.join(this.dataDir, `${id}.md`);
     }
 
+    /**
+     * Rebuild all chunks/embeddings with the current chunking strategy, keeping
+     * document ids, titles, metadata and timestamps. Old chunk files are backed up.
+     */
+    async reindexAll(): Promise<number> {
+        const docs = await this.oramaStore.getAllDocuments();
+        console.error(`[DocumentManager] Reindexing ${docs.length} documents (context-aware chunks)`);
+        await this.oramaStore.resetChunkIndexes();
+        for (const d of docs) {
+            const tags = Array.isArray(d.metadata?.tags) ? d.metadata.tags.map(String) : [];
+            const { children, parents } = await this.intelligentChunker.createChunks(d.id, d.content, {}, { title: d.title, tags });
+            await this.oramaStore.addChunksOnly({ ...d, chunks: children }, parents);
+        }
+        // Single write at the end: an interrupted reindex leaves disk untouched and is retried
+        await this.oramaStore.commitReindex();
+        return docs.length;
+    }
+
     async addDocument(title: string, content: string, metadata: Record<string, any> = {}): Promise<Document> {
         await this.ensureOramaInitialized();
-
-        const id = this.generateId(content);
         const now = new Date().toISOString();
+        const id = this.generateId(content); // id from the original content (stable)
+        const derived = deriveDocument(title, content, metadata);
+        return this.indexDocument(id, title, derived.content, derived.metadata, now, now);
+    }
+
+    /**
+     * Replace the content (and optionally title/metadata) of a document keeping its id.
+     */
+    async updateDocument(id: string, content: string, title?: string, metadata?: Record<string, any>): Promise<Document | null> {
+        await this.ensureOramaInitialized();
+        const existing = await this.oramaStore.getDocument(id);
+        if (!existing) return null;
+        const newTitle = title ?? existing.title;
+        // explicit tags/folder/ticket survive; the rest of the old metadata is kept
+        const base = { ...existing.metadata, ...(metadata || {}) };
+        const derived = deriveDocument(newTitle, content, base);
+        return this.indexDocument(id, newTitle, derived.content, derived.metadata, existing.created_at, new Date().toISOString(), true, true);
+    }
+
+    /**
+     * Merge metadata (tags, folder, ticket, ...) into a document and re-embed its chunks
+     * (tags are part of the embedded text). Pass null to remove a key.
+     */
+    async updateDocumentMetadata(id: string, patch: Record<string, any>): Promise<Document | null> {
+        await this.ensureOramaInitialized();
+        const existing = await this.oramaStore.getDocument(id);
+        if (!existing) return null;
+        const merged: Record<string, any> = { ...existing.metadata };
+        for (const [k, v] of Object.entries(patch)) {
+            if (v === null) delete merged[k]; else merged[k] = v;
+        }
+        return this.indexDocument(id, existing.title, existing.content, merged, existing.created_at, new Date().toISOString(), false, true);
+    }
+
+    /** Lightweight list (id, title, metadata, dates) without chunks. */
+    async getDocumentIndex() {
+        await this.ensureOramaInitialized();
+        return this.oramaStore.listDocumentIndex();
+    }
+
+    /** Ids of documents whose metadata matches the filters. */
+    private async allowedDocumentIds(filters?: SearchFilters): Promise<Set<string> | null> {
+        if (!hasFilters(filters)) return null;
+        const idx = await this.oramaStore.listDocumentIndex();
+        return new Set(idx.filter(d => matchesFilters(d.metadata, filters)).map(d => d.id));
+    }
+
+    private async indexDocument(
+        id: string, title: string, content: string, metadata: Record<string, any>,
+        createdAt: string, updatedAt: string, writeMd = true, replace = false
+    ): Promise<Document> {
 
         console.error(`[DocumentManager] Adding document id=${id} title=${title}`);
 
         // Create chunks using parent-child chunking pattern
         // Returns children (small, embedded) and parents (large, context-preserving)
-        const { children, parents } = await this.intelligentChunker.createChunks(id, content);
+        const tags = Array.isArray(metadata?.tags) ? metadata.tags.map(String) : [];
+        const { children, parents } = await this.intelligentChunker.createChunks(id, content, {}, { title, tags });
 
         const document: Document = {
             id,
@@ -104,24 +176,29 @@ export class DocumentManager {
             content,
             metadata,
             chunks: children,
-            created_at: now,
-            updated_at: now,
+            created_at: createdAt,
+            updated_at: updatedAt,
         };
 
-        // Store document + children in Orama
-        await this.oramaStore.addDocument(document);
-        console.error(`[DocumentManager] Stored document in Orama: ${id}`);
-
-        // Store parent chunks in separate parents DB
-        if (parents.length > 0) {
-            await this.oramaStore.addParents(id, parents);
-            console.error(`[DocumentManager] Stored ${parents.length} parent chunks for: ${id}`);
+        if (replace) {
+            // Chunks/embeddings are ready: swap the old version in one atomic step
+            await this.oramaStore.replaceDocument(document, parents);
+        } else {
+            // Store document + children in Orama
+            await this.oramaStore.addDocument(document);
+            // Store parent chunks in separate parents DB
+            if (parents.length > 0) {
+                await this.oramaStore.addParents(id, parents);
+            }
         }
+        console.error(`[DocumentManager] Stored document in Orama: ${id} (${parents.length} parents)`);
 
         // Create markdown file with the document content
-        const mdFilePath = this.getDocumentMdPath(id);
-        const mdContent = `# ${title}\n\n${content}`;
-        await writeFile(mdFilePath, mdContent, 'utf-8');
+        if (writeMd) {
+            const mdFilePath = this.getDocumentMdPath(id);
+            const mdContent = `# ${title}\n\n${content}`;
+            await writeFile(mdFilePath, mdContent, 'utf-8');
+        }
 
         return document;
     }
@@ -143,11 +220,13 @@ export class DocumentManager {
         return this.oramaStore.getAllDocuments();
     }
 
-    async searchDocuments(documentId: string, query: string, limit = 10): Promise<SearchResult[]> {
+    async searchDocuments(documentId: string, query: string, limit = 10, filters?: SearchFilters): Promise<SearchResult[]> {
         await this.ensureOramaInitialized();
         console.error(`[DocumentManager] searchDocuments documentId=${documentId} query="${query}" limit=${limit}`);
         const queryEmbedding = await this.embeddingProvider.generateEmbedding(query);
-        return this.oramaStore.searchChunks(queryEmbedding, limit, documentId, query);
+        const results = await this.oramaStore.searchChunks(queryEmbedding, limit, documentId, query);
+        const allowed = await this.allowedDocumentIds(filters);
+        return allowed ? results.filter(r => allowed.has(r.chunk.document_id)) : results;
     }
 
     /**
@@ -193,11 +272,15 @@ export class DocumentManager {
     /**
      * Search across all documents (cross-document semantic search)
      */
-    async searchAllDocuments(query: string, limit = 10): Promise<SearchResult[]> {
+    async searchAllDocuments(query: string, limit = 10, filters?: SearchFilters): Promise<SearchResult[]> {
         await this.ensureOramaInitialized();
         console.error(`[DocumentManager] searchAllDocuments query="${query}" limit=${limit}`);
         const queryEmbedding = await this.embeddingProvider.generateEmbedding(query);
-        return this.oramaStore.searchAllDocuments(queryEmbedding, limit, query);
+        const allowed = await this.allowedDocumentIds(filters);
+        if (!allowed) return this.oramaStore.searchAllDocuments(queryEmbedding, limit, query);
+        // Filter after retrieval: over-fetch so the filter does not starve the result list
+        const wide = await this.oramaStore.searchAllDocuments(queryEmbedding, Math.max(limit * 10, 100), query);
+        return wide.filter(r => allowed.has(r.chunk.document_id)).slice(0, limit);
     }
 
     private generateId(content: string): string {

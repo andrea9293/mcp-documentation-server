@@ -199,6 +199,16 @@
 
         /* ========= TABLE ========= */
         .table-wrap { overflow-x: auto; }
+        .doc-toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+        .doc-toolbar input[type=text] { flex:1; min-width:200px; }
+        .tag-chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+        .tag-chip { border:1px solid var(--border); background:transparent; color:var(--text-dim); border-radius:12px; padding:2px 10px; font-size:12px; cursor:pointer; }
+        .tag-chip.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+        .tag-chip.small { padding:0 7px; font-size:11px; cursor:default; }
+        .tree-folder > summary { cursor:pointer; padding:6px 4px; font-weight:600; }
+        .tree-folder .tree-children { margin-left:18px; border-left:1px solid var(--border); padding-left:10px; }
+        .tree-doc { display:flex; gap:8px; align-items:center; padding:4px 0; flex-wrap:wrap; }
+        .tree-doc .tree-title { cursor:pointer; color:var(--accent); }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -448,6 +458,85 @@
             border: 1px solid var(--border);
         }
 
+        .doc-view-toggle { display: inline-flex; gap: 4px; margin-left: auto; }
+        .doc-view-toggle[hidden] { display: none; }
+        .doc-view-toggle .btn.is-active {
+            background: rgba(122,162,247,.18);
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            padding: 4px 9px;
+        }
+        .doc-view-toggle .btn.is-active:hover { background: rgba(122,162,247,.26); }
+
+        /* Rendered Markdown preview */
+        .doc-content-view.markdown { white-space: normal; }
+        .doc-content-view.markdown > :first-child { margin-top: 0; }
+        .doc-content-view.markdown > :last-child { margin-bottom: 0; }
+        .doc-content-view.markdown h1,
+        .doc-content-view.markdown h2,
+        .doc-content-view.markdown h3,
+        .doc-content-view.markdown h4,
+        .doc-content-view.markdown h5,
+        .doc-content-view.markdown h6 {
+            margin: 18px 0 8px;
+            line-height: 1.3;
+            color: var(--text);
+        }
+        .doc-content-view.markdown h1 { font-size: 20px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+        .doc-content-view.markdown h2 { font-size: 17px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+        .doc-content-view.markdown h3 { font-size: 15px; }
+        .doc-content-view.markdown h4,
+        .doc-content-view.markdown h5,
+        .doc-content-view.markdown h6 { font-size: 13px; }
+        .doc-content-view.markdown p,
+        .doc-content-view.markdown ul,
+        .doc-content-view.markdown ol,
+        .doc-content-view.markdown blockquote,
+        .doc-content-view.markdown table,
+        .doc-content-view.markdown pre { margin: 0 0 12px; }
+        .doc-content-view.markdown ul,
+        .doc-content-view.markdown ol { padding-left: 22px; }
+        .doc-content-view.markdown li { margin: 3px 0; }
+        .doc-content-view.markdown li > ul,
+        .doc-content-view.markdown li > ol { margin: 4px 0 0; }
+        .doc-content-view.markdown a { color: var(--accent); text-decoration: none; }
+        .doc-content-view.markdown a:hover { text-decoration: underline; }
+        .doc-content-view.markdown code {
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+            font-size: 12px;
+            background: var(--bg-input);
+            padding: 1px 5px;
+            border-radius: 4px;
+        }
+        .doc-content-view.markdown pre {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            overflow-x: auto;
+        }
+        .doc-content-view.markdown pre code { background: none; padding: 0; }
+        .doc-content-view.markdown blockquote {
+            border-left: 3px solid var(--accent);
+            padding-left: 12px;
+            color: var(--text-dim);
+        }
+        .doc-content-view.markdown table { border-collapse: collapse; width: 100%; }
+        .doc-content-view.markdown th,
+        .doc-content-view.markdown td {
+            border: 1px solid var(--border);
+            padding: 6px 10px;
+            text-align: left;
+        }
+        .doc-content-view.markdown th { background: var(--bg-input); }
+        .doc-content-view.markdown hr {
+            border: 0;
+            border-top: 1px solid var(--border);
+            margin: 16px 0;
+        }
+        .doc-content-view.markdown img { max-width: 100%; border-radius: 6px; }
+        .doc-content-view.markdown input[type="checkbox"] { margin-right: 4px; }
+
         /* ========= RESPONSIVE ========= */
         @media (max-width: 768px) {
             .sidebar { width: 60px; min-width: 60px; }
@@ -549,9 +638,18 @@
                     <div class="card-title" style="margin-bottom:0">📄 All Documents</div>
                     <button class="btn btn-primary btn-sm" onclick="navigateTo('add-document')">➕ Add New</button>
                 </div>
-                <div class="table-wrap">
+                <div class="doc-toolbar">
+                    <input type="text" id="doc-filter-text" placeholder="Filter by title, tag or folder...">
+                    <div class="doc-view-toggle" role="group" aria-label="Documents layout">
+                        <button type="button" class="btn btn-secondary btn-sm" id="docs-view-tree" onclick="setDocsLayout('tree')">🌲 Folders</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="docs-view-flat" onclick="setDocsLayout('flat')">☰ Flat</button>
+                    </div>
+                </div>
+                <div class="tag-chips" id="doc-tag-chips"></div>
+                <div id="documents-tree"></div>
+                <div class="table-wrap" id="documents-flat">
                     <table>
-                        <thead><tr><th>Title</th><th>ID</th><th>Chunks</th><th>Created</th><th>Actions</th></tr></thead>
+                        <thead><tr><th>Title</th><th>Tags</th><th>ID</th><th>Chunks</th><th>Created</th><th>Actions</th></tr></thead>
                         <tbody id="documents-table"></tbody>
                     </table>
                 </div>
@@ -600,6 +698,14 @@
                         <div class="form-group" style="flex:1">
                             <label>Limit</label>
                             <input type="number" id="sa-limit" value="10" min="1" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Tags (comma separated, optional)</label>
+                            <input type="text" id="sa-tags" placeholder="flyway, backend">
+                        </div>
+                        <div class="form-group">
+                            <label>Folder (optional)</label>
+                            <input type="text" id="sa-folder" placeholder="finutive/backend">
                         </div>
                     </div>
                     <button type="submit" class="btn btn-primary">🔍 Search</button>
@@ -727,10 +833,14 @@
 <div class="modal-overlay" id="doc-modal">
     <div class="modal" style="max-width:800px;">
         <h3 id="modal-doc-title">Document</h3>
-        <div style="display:flex;gap:12px;margin-bottom:16px;">
+        <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;flex-wrap:wrap;">
             <span class="chunk-badge" id="modal-doc-id"></span>
             <span class="chunk-badge" id="modal-doc-chunks"></span>
             <span class="chunk-badge" id="modal-doc-date"></span>
+            <div class="doc-view-toggle" id="modal-doc-toggle" role="group" aria-label="Document view" hidden>
+                <button type="button" class="btn btn-secondary btn-sm is-active" data-view="preview" aria-pressed="true">Preview</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-view="source" aria-pressed="false">Source</button>
+            </div>
         </div>
         <div class="doc-content-view" id="modal-doc-content"></div>
         <div class="modal-actions">
@@ -755,6 +865,7 @@
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toasts"></div>
 
+<script src="markdown.js"></script>
 <script>
 // ============ STATE ============
 let documents = [];
@@ -871,47 +982,142 @@ async function loadDashboard() {
 }
 
 // ============ DOCUMENTS ============
+let docsLayout = localStorage.getItem('docsLayout') || 'tree';
+const docFilter = { text: '', tags: new Set() };
+const openFolders = new Set(JSON.parse(localStorage.getItem('openFolders') || '[]'));
+
+function setDocsLayout(l) {
+    docsLayout = l;
+    localStorage.setItem('docsLayout', l);
+    renderDocuments();
+}
+
+function docTags(d) { return (d.metadata && Array.isArray(d.metadata.tags)) ? d.metadata.tags : []; }
+function docFolder(d) { return (d.metadata && d.metadata.folder) ? String(d.metadata.folder) : ''; }
+
+function filteredDocs() {
+    const q = docFilter.text.toLowerCase();
+    return documents.filter(d => {
+        if ([...docFilter.tags].some(t => !docTags(d).includes(t))) return false;
+        if (!q) return true;
+        return d.title.toLowerCase().includes(q) || docFolder(d).toLowerCase().includes(q) || docTags(d).some(t => t.toLowerCase().includes(q));
+    });
+}
+
+function toggleTag(t) {
+    if (docFilter.tags.has(t)) docFilter.tags.delete(t); else docFilter.tags.add(t);
+    renderDocuments();
+}
+
+function tagChips(d) {
+    return docTags(d).map(t => `<span class="tag-chip small">${escHtml(t)}</span>`).join(' ');
+}
+
+function docActions(d) {
+    return `<div class="btn-group">
+        <button class="btn btn-secondary btn-sm" onclick="viewDocument('${d.id}')">👁 View</button>
+        <button class="btn btn-danger btn-sm" onclick="confirmDelete('${d.id}', '${escHtml(d.title).replace(/'/g, "\\'")}')">🗑</button>
+    </div>`;
+}
+
+function buildTree(docs) {
+    const root = { folders: {}, docs: [] };
+    for (const d of docs) {
+        let node = root;
+        const f = docFolder(d);
+        for (const part of (f ? f.split('/') : ['(no folder)'])) {
+            node = (node.folders[part] ||= { folders: {}, docs: [] });
+        }
+        node.docs.push(d);
+    }
+    return root;
+}
+
+function countDocs(node) {
+    return node.docs.length + Object.values(node.folders).reduce((n, c) => n + countDocs(c), 0);
+}
+
+function renderTree(node, pathPrefix) {
+    const folders = Object.keys(node.folders).sort().map(name => {
+        const full = pathPrefix ? pathPrefix + '/' + name : name;
+        const child = node.folders[name];
+        const open = openFolders.has(full) || docFilter.text || docFilter.tags.size ? ' open' : '';
+        return `<details class="tree-folder" data-path="${escHtml(full)}"${open}>
+            <summary>📁 ${escHtml(name)} <span class="chunk-badge">${countDocs(child)}</span></summary>
+            <div class="tree-children">${renderTree(child, full)}</div></details>`;
+    }).join('');
+    const docs = node.docs.map(d => `<div class="tree-doc">
+        <span class="tree-title" onclick="viewDocument('${d.id}')">📄 ${escHtml(d.title)}</span>
+        ${tagChips(d)} ${docActions(d)}</div>`).join('');
+    return folders + docs;
+}
+
+function renderDocuments() {
+    const empty = document.getElementById('documents-empty');
+    const all = {};
+    documents.forEach(d => docTags(d).forEach(t => { all[t] = (all[t] || 0) + 1; }));
+    document.getElementById('doc-tag-chips').innerHTML = Object.keys(all).sort().map(t =>
+        `<button type="button" class="tag-chip${docFilter.tags.has(t) ? ' active' : ''}" data-tag="${escHtml(t)}">${escHtml(t)} (${all[t]})</button>`).join('');
+    document.querySelectorAll('#doc-tag-chips .tag-chip').forEach(b => b.addEventListener('click', () => toggleTag(b.dataset.tag)));
+
+    const docs = filteredDocs();
+    document.getElementById('docs-view-tree').classList.toggle('is-active', docsLayout === 'tree');
+    document.getElementById('docs-view-flat').classList.toggle('is-active', docsLayout === 'flat');
+    document.getElementById('documents-tree').style.display = docsLayout === 'tree' ? '' : 'none';
+    document.getElementById('documents-flat').style.display = docsLayout === 'flat' ? '' : 'none';
+    empty.style.display = docs.length === 0 ? '' : 'none';
+
+    document.getElementById('documents-tree').innerHTML = renderTree(buildTree(docs), '');
+    document.querySelectorAll('#documents-tree details.tree-folder').forEach(el => el.addEventListener('toggle', () => {
+        if (el.open) openFolders.add(el.dataset.path); else openFolders.delete(el.dataset.path);
+        localStorage.setItem('openFolders', JSON.stringify([...openFolders]));
+    }));
+    document.getElementById('documents-table').innerHTML = docs.map(d => `
+        <tr>
+            <td><strong style="cursor:pointer;color:var(--accent)" onclick="viewDocument('${d.id}')">${escHtml(d.title)}</strong></td>
+            <td>${tagChips(d)}</td>
+            <td class="id-cell">${d.id}</td>
+            <td>${d.chunks_count}</td>
+            <td>${fmtDate(d.created_at)}</td>
+            <td>${docActions(d)}</td>
+        </tr>`).join('');
+}
+
+document.getElementById('doc-filter-text').addEventListener('input', e => {
+    docFilter.text = e.target.value.trim();
+    renderDocuments();
+});
+
 async function loadDocuments() {
     try {
         documents = await api('GET', '/documents');
         document.getElementById('doc-count-badge').textContent = documents.length;
-
-        const tbody = document.getElementById('documents-table');
-        const empty = document.getElementById('documents-empty');
-        if (documents.length === 0) {
-            tbody.innerHTML = '';
-            empty.style.display = '';
-            return;
-        }
-        empty.style.display = 'none';
-        tbody.innerHTML = documents.map(d => `
-            <tr>
-                <td><strong style="cursor:pointer;color:var(--accent)" onclick="viewDocument('${d.id}')">${escHtml(d.title)}</strong></td>
-                <td class="id-cell">${d.id}</td>
-                <td>${d.chunks_count}</td>
-                <td>${fmtDate(d.created_at)}</td>
-                <td>
-                    <div class="btn-group">
-                        <button class="btn btn-secondary btn-sm" onclick="viewDocument('${d.id}')">👁 View</button>
-                        <button class="btn btn-danger btn-sm" onclick="confirmDelete('${d.id}', '${escHtml(d.title).replace(/'/g, "\\'")}')">🗑</button>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
+        renderDocuments();
     } catch (e) {
         toast(e.message, 'error');
     }
 }
 
 // ============ VIEW DOCUMENT MODAL ============
+let modalDocument = null;
+
+// The renderer is optional: if markdown.js is missing the modal falls back to
+// the plain text view instead of failing.
+function canPreviewMarkdown(doc) {
+    return typeof MarkdownPreview !== 'undefined' && MarkdownPreview.isMarkdownDocument(doc);
+}
+
 async function viewDocument(id) {
     try {
         const doc = await api('GET', '/documents/' + id);
+        modalDocument = doc;
         document.getElementById('modal-doc-title').textContent = doc.title;
         document.getElementById('modal-doc-id').textContent = 'ID: ' + doc.id;
         document.getElementById('modal-doc-chunks').textContent = 'Chunks: ' + (doc.chunks?.length || 0);
         document.getElementById('modal-doc-date').textContent = fmtDate(doc.created_at);
-        document.getElementById('modal-doc-content').textContent = doc.content;
+        const isMarkdown = canPreviewMarkdown(doc);
+        document.getElementById('modal-doc-toggle').hidden = !isMarkdown;
+        setDocView(isMarkdown ? 'preview' : 'source');
         document.getElementById('modal-delete-btn').onclick = () => {
             closeModal();
             confirmDelete(doc.id, doc.title);
@@ -921,6 +1127,28 @@ async function viewDocument(id) {
         toast(e.message, 'error');
     }
 }
+
+function setDocView(view) {
+    const container = document.getElementById('modal-doc-content');
+    const usePreview = view === 'preview' && !!modalDocument && canPreviewMarkdown(modalDocument);
+    container.classList.toggle('markdown', usePreview);
+    container.replaceChildren();
+    if (usePreview) {
+        container.appendChild(MarkdownPreview.render(modalDocument.content));
+    } else if (modalDocument) {
+        container.textContent = modalDocument.content ?? '';
+    }
+    container.scrollTop = 0;
+    document.querySelectorAll('#modal-doc-toggle .btn').forEach(btn => {
+        const active = btn.dataset.view === view;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-pressed', String(active));
+    });
+}
+
+document.querySelectorAll('#modal-doc-toggle .btn').forEach(btn => {
+    btn.addEventListener('click', () => setDocView(btn.dataset.view));
+});
 
 function closeModal() { document.getElementById('doc-modal').classList.remove('active'); }
 
@@ -981,7 +1209,9 @@ document.getElementById('search-all-form').addEventListener('submit', async (e) 
     const container = document.getElementById('search-all-results');
     container.innerHTML = '<div style="text-align:center;padding:20px"><span class="spinner"></span> Searching...</div>';
     try {
-        const results = await api('POST', '/search-all', { query, limit });
+        const tags = document.getElementById('sa-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+        const folder = document.getElementById('sa-folder').value.trim();
+        const results = await api('POST', '/search-all', { query, limit, ...(tags.length ? { tags } : {}), ...(folder ? { folder } : {}) });
         if (results.length === 0) {
             container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-text">No results found</div></div>';
             return;
@@ -993,7 +1223,7 @@ document.getElementById('search-all-form').addEventListener('submit', async (e) 
                         <div class="result-meta">📄 <strong>${getDocTitle(r.document_id)}</strong> · Section #${r.parent_index}</div>
                         <span class="result-score ${scoreClass(r.score)}">${(r.score * 100).toFixed(1)}%</span>
                     </div>
-                    ${r.heading ? `<div class="result-heading">§ ${escHtml(r.heading)}</div>` : ''}
+                    ${(r.heading_path || r.heading) ? `<div class="result-heading">§ ${escHtml(r.heading_path || r.heading)}</div>` : ''}
                     <div class="result-content">${escHtml(r.content)}</div>
                     <div style="margin-top:8px">
                         <button class="btn btn-secondary btn-sm" onclick="loadContext('${r.document_id}', ${r.parent_index})">🪟 Context</button>
@@ -1027,7 +1257,7 @@ document.getElementById('search-doc-form').addEventListener('submit', async (e) 
                         <div class="result-meta">Section #${r.parent_index}</div>
                         <span class="result-score ${scoreClass(r.score)}">${(r.score * 100).toFixed(1)}%</span>
                     </div>
-                    ${r.heading ? `<div class="result-heading">§ ${escHtml(r.heading)}</div>` : ''}
+                    ${(r.heading_path || r.heading) ? `<div class="result-heading">§ ${escHtml(r.heading_path || r.heading)}</div>` : ''}
                     <div class="result-content">${escHtml(r.content)}</div>
                     <div style="margin-top:8px">
                         <button class="btn btn-secondary btn-sm" onclick="loadContext('${r.document_id}', ${r.parent_index})">🪟 Context</button>
