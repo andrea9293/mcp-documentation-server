@@ -8,7 +8,7 @@ import { DocumentManager } from './document-manager.js';
 import { GeminiSearchService } from './gemini-search-service.js';
 import { startWebServer } from './web-server.js';
 import { parseFilters } from './metadata-utils.js';
-import { deduplicateSearchResults, formatDocumentList } from './search-utils.js';
+import { deduplicateSearchResults, formatAgentSearchResponse, formatDocumentList } from './search-utils.js';
 
 // Initialize server
 const server = new FastMCP({
@@ -144,6 +144,7 @@ server.addTool({
         document_id: z.string().describe("The ID of the document to search within"),
         query: z.string().describe("The search query"),
         limit: z.number().optional().default(10).describe("Maximum number of chunk results to return"),
+        max_chars: z.number().optional().default(1200).describe("Maximum characters of each returned snippet"),
         tags: z.array(z.string()).optional().describe("Optional: only documents having ALL these tags"),
         folder: z.string().optional().describe("Optional: only documents in this folder (prefix match, e.g. 'finutive/front')"),
         ticket: z.string().optional().describe("Optional: only documents linked to this ticket id (e.g. '2447')"),
@@ -157,16 +158,8 @@ server.addTool({
             }
             const results = await manager.searchDocuments(args.document_id, args.query, args.limit, parseFilters(args));
 
-            if (results.length === 0) {
-                return "No chunks found matching your query in the specified document.";
-            }
-
             const searchResults = await deduplicateSearchResults(results, manager);
-
-            const res = {
-                hint_for_llm: "Results return parent-level content sections. Use get_context_window with document_id and parent_index to navigate surrounding parent sections.",
-                results: searchResults,
-            }
+            const res = await formatAgentSearchResponse(searchResults, manager, { maxChars: args.max_chars, limit: args.limit });
             return JSON.stringify(res, null, 2);
         } catch (error) {
             throw new Error(`Search failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -221,6 +214,7 @@ server.addTool({
     parameters: z.object({
         query: z.string().describe("The search query"),
         limit: z.number().optional().default(10).describe("Maximum number of chunk results to return"),
+        max_chars: z.number().optional().default(1200).describe("Maximum characters of each returned snippet"),
         tags: z.array(z.string()).optional().describe("Optional: only documents having ALL these tags"),
         folder: z.string().optional().describe("Optional: only documents in this folder (prefix match, e.g. 'finutive/front')"),
         ticket: z.string().optional().describe("Optional: only documents linked to this ticket id (e.g. '2447')"),
@@ -229,16 +223,8 @@ server.addTool({
             const manager = await initializeDocumentManager();
             const results = await manager.searchAllDocuments(args.query, args.limit, parseFilters(args));
 
-            if (results.length === 0) {
-                return "No chunks found matching your query across all documents.";
-            }
-
             const searchResults = await deduplicateSearchResults(results, manager);
-
-            const res = {
-                hint_for_llm: "Results return parent-level content sections. Use get_context_window with document_id and parent_index to navigate surrounding parent sections.",
-                results: searchResults,
-            };
+            const res = await formatAgentSearchResponse(searchResults, manager, { maxChars: args.max_chars, limit: args.limit });
             return JSON.stringify(res, null, 2);
         } catch (error) {
             throw new Error(`Cross-document search failed: ${error instanceof Error ? error.message : String(error)}`);

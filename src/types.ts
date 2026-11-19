@@ -25,6 +25,8 @@ export interface Document {
 export interface SearchResult {
     chunk: DocumentChunk;
     score: number;
+    /** Cosine similarity between query and chunk embeddings (absolute, comparable across queries). */
+    similarity?: number;
 }
 
 // Legacy interfaces for backward compatibility

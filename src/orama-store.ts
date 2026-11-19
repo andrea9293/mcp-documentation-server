@@ -7,6 +7,13 @@ import * as path from 'path';
 import { Document, DocumentChunk, SearchResult, OramaChunkDocument, OramaDocDocument, OramaParentDocument, ParentChunkData } from './types.js';
 import { getDefaultDataDir } from './utils.js';
 
+function cosine(a: ArrayLike<number>, b?: ArrayLike<number>): number | undefined {
+    if (!b || a.length !== b.length) return undefined;
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+    return na && nb ? dot / Math.sqrt(na * nb) : undefined;
+}
+
 /**
  * OramaStore: manages two Orama DB instances (chunks + documents) with persistence to disk.
  */
@@ -553,7 +560,7 @@ export class OramaStore {
                     properties: ['content', 'document_title', 'heading_path'],
                     similarity: 0.5,
                     limit,
-                    includeVectors: false,
+                    includeVectors: true,
                 };
                 if (documentId) {
                     searchParams.where = { document_id: documentId };
@@ -568,7 +575,7 @@ export class OramaStore {
                     },
                     similarity: 0.5,
                     limit,
-                    includeVectors: false,
+                    includeVectors: true,
                 };
                 if (documentId) {
                     searchParams.where = { document_id: documentId };
@@ -587,6 +594,7 @@ export class OramaStore {
                     metadata: this.safeJsonParse(hit.document.metadata),
                 } as DocumentChunk,
                 score: hit.score,
+                similarity: cosine(embedding, (hit.document as any).embedding),
             }));
         } catch (error) {
             console.error('[OramaStore] Error searching chunks:', error);
@@ -616,7 +624,7 @@ export class OramaStore {
                     properties: ['content', 'document_title', 'heading_path'],
                     similarity: 0.5,
                     limit,
-                    includeVectors: false,
+                    includeVectors: true,
                 } as any) as Results<OramaChunkDocument>;
             } else {
                 // Pure vector search
@@ -628,7 +636,7 @@ export class OramaStore {
                     },
                     similarity: 0.5,
                     limit,
-                    includeVectors: false,
+                    includeVectors: true,
                 } as any) as Results<OramaChunkDocument>;
             }
 
@@ -643,6 +651,7 @@ export class OramaStore {
                     metadata: this.safeJsonParse(hit.document.metadata),
                 } as DocumentChunk,
                 score: hit.score,
+                similarity: cosine(embedding, (hit.document as any).embedding),
             }));
         } catch (error) {
             console.error('[OramaStore] Error in searchAllDocuments:', error);

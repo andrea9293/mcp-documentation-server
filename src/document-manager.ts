@@ -144,6 +144,12 @@ export class DocumentManager {
         return this.indexDocument(id, existing.title, existing.content, merged, existing.created_at, new Date().toISOString(), false);
     }
 
+    /** Lightweight list (id, title, metadata, dates) without chunks. */
+    async getDocumentIndex() {
+        await this.ensureOramaInitialized();
+        return this.oramaStore.listDocumentIndex();
+    }
+
     /** Ids of documents whose metadata matches the filters. */
     private async allowedDocumentIds(filters?: SearchFilters): Promise<Set<string> | null> {
         if (!hasFilters(filters)) return null;
