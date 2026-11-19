@@ -48,6 +48,8 @@ interface ParentChunk {
     startPosition: number;
     endPosition: number;
     heading?: string;
+    /** Full heading path when the parent is a document section (markdown). */
+    headingPath?: string;
     contentType: ContentType;
 }
 
@@ -98,7 +100,10 @@ export class IntelligentChunker {
         );
 
         // Step 1: Split document into large parent chunks
-        const internalParents = this.createParentChunks(content, contentType, opts);
+        const sectionParents = (contentType === ContentType.MARKDOWN || contentType === ContentType.MIXED)
+            ? this.createSectionParents(content, contentType, opts)
+            : null;
+        const internalParents = sectionParents ?? this.createParentChunks(content, contentType, opts);
 
         // Step 2: Build ParentChunkData array for separate storage
         const parentData: ParentChunkData[] = internalParents.map(p => ({
@@ -130,7 +135,7 @@ export class IntelligentChunker {
                 const globalEnd = globalStart + trimmed.length;
                 if (posInParent >= 0) searchFrom = posInParent + 1;
 
-                const headingPath = this.findHeadingPathForPosition(allHeadings, globalStart);
+                const headingPath = parent.headingPath ?? this.findHeadingPathForPosition(allHeadings, globalStart);
                 const leafHeading = headingPath ? headingPath.split(' > ').pop() : parent.heading;
                 const embeddings = await this.embeddingProvider.generateEmbedding(
                     buildEmbeddingText(trimmed, context, headingPath)
@@ -213,6 +218,50 @@ export class IntelligentChunker {
         }
 
         return parents;
+    }
+
+    /**
+     * Section-based parents: one parent per heading section (levels 1-4), so every
+     * child belongs to exactly one section and carries its exact heading path.
+     * Oversized sections are split further but keep the same path.
+     * Returns null when the document has no usable headings.
+     */
+    private createSectionParents(content: string, contentType: ContentType, opts: ResolvedOptions): ParentChunk[] | null {
+        const headings = this.extractHeadings(content).filter(h => h.level <= 4);
+        if (headings.length === 0) return null;
+
+        const bounds = [0, ...headings.map(h => h.position).filter(p => p > 0), content.length];
+        const starts = Array.from(new Set(bounds)).sort((a, b) => a - b);
+        const parents: ParentChunk[] = [];
+        const separators = this.getParentSeparators(contentType);
+
+        for (let i = 0; i < starts.length - 1; i++) {
+            const start = starts[i], end = starts[i + 1];
+            const text = content.slice(start, end);
+            const body = text.replace(/^#{1,6}\s+.*$/m, '').trim();
+            if (!body) continue; // heading with no text of its own (e.g. H1 followed by H2)
+            const path = this.findHeadingPathForPosition(headings, start);
+            const pieces = text.length > opts.parentMaxSize
+                ? this.splitWithSeparators(text, separators, opts.parentMaxSize)
+                : [text];
+            let from = start;
+            for (const piece of pieces) {
+                if (!piece.trim()) continue;
+                const at = content.indexOf(piece.substring(0, Math.min(80, piece.length)), from);
+                const pStart = at >= 0 ? at : from;
+                parents.push({
+                    index: parents.length,
+                    content: piece,
+                    startPosition: pStart,
+                    endPosition: pStart + piece.length,
+                    heading: path ? path.split(' > ').pop() : undefined,
+                    headingPath: path,
+                    contentType,
+                });
+                from = pStart + 1;
+            }
+        }
+        return parents.length > 0 ? parents : null;
     }
 
     // ─── Child Chunk Creation ─────────────────────────────────────────────

@@ -7,7 +7,7 @@
  *    (the whole identifier AND its parts are indexed)
  * The same tokenizer runs at index and query time, so matching stays symmetric.
  */
-export const TOKENIZER_VERSION = 'es-fold-ids-v1';
+export const TOKENIZER_VERSION = 'es-fold-ids-sections-v2';
 
 const STOPWORDS = new Set((
     'a al algo ante con como cual cuando de del desde donde el ella ellos en entre era es esta este esto ' +
