@@ -21,6 +21,8 @@ export class OramaStore {
     private migrationFlagPath: string;
     private vectorDimensions: number;
     private initialized = false;
+    /** True when the restored chunks DB uses an older schema and must be rebuilt. */
+    needsReindex = false;
 
     constructor(vectorDimensions: number) {
         const baseDir = getDefaultDataDir();
@@ -98,6 +100,12 @@ export class OramaStore {
             console.error('[OramaStore] Created new parents DB');
         }
 
+        // Detect an outdated chunks schema (pre heading_path): needs a reindex
+        if (restoredChunks) {
+            const sch = (this.chunksDb as any)?.schema;
+            if (sch && !('heading_path' in sch)) this.needsReindex = true;
+        }
+
         this.initialized = true;
 
         console.error(`[OramaStore] Initialization finished. vectorDimensions=${this.vectorDimensions}`);
@@ -117,12 +125,27 @@ export class OramaStore {
                 document_title: 'string',
                 chunk_index: 'number',
                 content: 'string',
+                heading_path: 'string',
                 embedding: `vector[${this.vectorDimensions}]` as `vector[${number}]`,
                 start_position: 'number',
                 end_position: 'number',
                 metadata: 'string',
             },
         });
+    }
+
+    /**
+     * Drop chunks and parents (after backing up the old files) so every document
+     * can be re-chunked with the current schema. Documents DB is kept.
+     */
+    async resetChunkIndexes(): Promise<void> {
+        const { copyFile } = await import('fs/promises');
+        for (const f of [this.chunksDbPath, this.parentsDbPath]) {
+            if (existsSync(f)) await copyFile(f, `${f}.bak-pre-reindex`);
+        }
+        this.chunksDb = this.createChunksDb();
+        this.parentsDb = this.createParentsDb();
+        this.needsReindex = false;
     }
 
     /**
@@ -258,6 +281,7 @@ export class OramaStore {
                 document_title: doc.title,
                 chunk_index: chunk.chunk_index,
                 content: chunk.content,
+                heading_path: String(chunk.metadata?.heading_path || ''),
                 embedding,
                 start_position: chunk.start_position,
                 end_position: chunk.end_position,
@@ -508,7 +532,7 @@ export class OramaStore {
                         value: embedding,
                         property: 'embedding',
                     },
-                    properties: ['content', 'document_title'],
+                    properties: ['content', 'document_title', 'heading_path'],
                     similarity: 0.5,
                     limit,
                     includeVectors: false,
@@ -571,7 +595,7 @@ export class OramaStore {
                         value: embedding,
                         property: 'embedding',
                     },
-                    properties: ['content', 'document_title'],
+                    properties: ['content', 'document_title', 'heading_path'],
                     similarity: 0.5,
                     limit,
                     includeVectors: false,

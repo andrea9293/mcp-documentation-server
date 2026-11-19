@@ -11,6 +11,7 @@ export interface DeduplicatedSearchResult {
     score: number;
     content: string;
     heading?: string;
+    heading_path?: string;
 }
 
 /**
@@ -41,6 +42,7 @@ export async function deduplicateSearchResults(
                 score: result.score,
                 content: parentContent,
                 heading: result.chunk.metadata?.heading,
+                heading_path: result.chunk.metadata?.heading_path,
             });
         }
     }

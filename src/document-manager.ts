@@ -53,6 +53,9 @@ export class DocumentManager {
             console.error('[DocumentManager] Initializing OramaStore...');
             await this.oramaStore.initialize();
             this.oramaInitialized = true;
+            if (this.oramaStore.needsReindex) {
+                await this.reindexAll();
+            }
             console.error('[DocumentManager] OramaStore initialized');
         }
     }
@@ -86,17 +89,38 @@ export class DocumentManager {
         return path.join(this.dataDir, `${id}.md`);
     }
 
+    /**
+     * Rebuild all chunks/embeddings with the current chunking strategy, keeping
+     * document ids, titles, metadata and timestamps. Old chunk files are backed up.
+     */
+    async reindexAll(): Promise<number> {
+        const docs = await this.oramaStore.getAllDocuments();
+        console.error(`[DocumentManager] Reindexing ${docs.length} documents (context-aware chunks)`);
+        await this.oramaStore.resetChunkIndexes();
+        for (const d of docs) {
+            await this.oramaStore.deleteDocument(d.id);
+            await this.indexDocument(d.id, d.title, d.content, d.metadata, d.created_at, d.updated_at);
+        }
+        return docs.length;
+    }
+
     async addDocument(title: string, content: string, metadata: Record<string, any> = {}): Promise<Document> {
         await this.ensureOramaInitialized();
-
-        const id = this.generateId(content);
         const now = new Date().toISOString();
+        return this.indexDocument(this.generateId(content), title, content, metadata, now, now);
+    }
+
+    private async indexDocument(
+        id: string, title: string, content: string, metadata: Record<string, any>,
+        createdAt: string, updatedAt: string
+    ): Promise<Document> {
 
         console.error(`[DocumentManager] Adding document id=${id} title=${title}`);
 
         // Create chunks using parent-child chunking pattern
         // Returns children (small, embedded) and parents (large, context-preserving)
-        const { children, parents } = await this.intelligentChunker.createChunks(id, content);
+        const tags = Array.isArray(metadata?.tags) ? metadata.tags.map(String) : [];
+        const { children, parents } = await this.intelligentChunker.createChunks(id, content, {}, { title, tags });
 
         const document: Document = {
             id,
@@ -104,8 +128,8 @@ export class DocumentManager {
             content,
             metadata,
             chunks: children,
-            created_at: now,
-            updated_at: now,
+            created_at: createdAt,
+            updated_at: updatedAt,
         };
 
         // Store document + children in Orama

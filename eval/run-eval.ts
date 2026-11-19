@@ -41,24 +41,26 @@ async function main() {
         const ranked = hits.map(h => ({
             title: titles.get(h.document_id) ?? h.document_id,
             heading: h.heading ?? '',
+            path: h.heading_path ?? h.heading ?? '',
             score: h.score,
         }));
         const docOk = (h: { title: string }) => norm(h.title) === norm(q.docTitle);
         const secOk = (h: { title: string; heading: string }) => docOk(h) && norm(h.heading).includes(norm(q.section));
+        const pathOk = (h: { title: string; path: string }) => docOk(h) && norm(h.path).includes(norm(q.section));
         const first = (f: (h: any) => boolean) => ranked.findIndex(f) + 1; // 0 = not found
-        const dRank = first(docOk), sRank = first(secOk);
+        const dRank = first(docOk), sRank = first(secOk), pRank = first(pathOk);
         rows.push({
             id: q.id, query: q.query, expectedDoc: q.docTitle, expectedSection: q.section,
-            docRank: dRank || null, docSectionRank: sRank || null,
+            docRank: dRank || null, docSectionRank: sRank || null, pathRank: pRank || null,
             doc1: dRank === 1, doc3: dRank >= 1 && dRank <= 3,
-            sec1: sRank === 1, sec3: sRank >= 1 && sRank <= 3,
+            sec1: sRank === 1, path1: pRank === 1, path3: pRank >= 1 && pRank <= 3, sec3: sRank >= 1 && sRank <= 3,
             top3: ranked.slice(0, 3),
         });
     }
 
     const n = rows.length;
     const sum = (k: string) => rows.filter(r => r[k]).length;
-    const totals = { questions: n, doc_at_1: sum('doc1') / n, doc_at_3: sum('doc3') / n, docsection_at_1: sum('sec1') / n, docsection_at_3: sum('sec3') / n };
+    const totals = { questions: n, doc_at_1: sum('doc1') / n, doc_at_3: sum('doc3') / n, docsection_at_1: sum('sec1') / n, docsection_at_3: sum('sec3') / n, docpath_at_1: sum('path1') / n, docpath_at_3: sum('path3') / n };
 
     console.log('\nID   doc@1 doc@3 sec@1 sec@3  rank(doc/sec)  query');
     const mark = (b: boolean) => (b ? ' ✔  ' : ' ✘  ');
@@ -66,7 +68,7 @@ async function main() {
         console.log(`${r.id}  ${mark(r.doc1)} ${mark(r.doc3)} ${mark(r.sec1)} ${mark(r.sec3)}   ${String(r.docRank ?? '-').padStart(3)}/${String(r.docSectionRank ?? '-').padEnd(3)}   ${r.query.slice(0, 70)}`);
     }
     const pct = (x: number) => (x * 100).toFixed(1) + '%';
-    console.log(`\nTotals (${n} questions): doc@1 ${pct(totals.doc_at_1)} | doc@3 ${pct(totals.doc_at_3)} | doc+section@1 ${pct(totals.docsection_at_1)} | doc+section@3 ${pct(totals.docsection_at_3)}`);
+    console.log(`\nTotals (${n} questions): doc@1 ${pct(totals.doc_at_1)} | doc@3 ${pct(totals.doc_at_3)} | doc+section@1 ${pct(totals.docsection_at_1)} | doc+section@3 ${pct(totals.docsection_at_3)} | doc+path@1 ${pct(totals.docpath_at_1)} | doc+path@3 ${pct(totals.docpath_at_3)}`);
 
     const outDir = path.join(here, 'results');
     fs.mkdirSync(outDir, { recursive: true });
