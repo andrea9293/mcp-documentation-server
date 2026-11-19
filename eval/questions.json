@@ -1,0 +1,212 @@
+[
+  {
+    "id": "Q01",
+    "query": "cómo se hace un hotfix en front y qué merges necesita",
+    "docTitle": "Finutive · front · Proceso de ramas",
+    "section": "Flujo de hotfix"
+  },
+  {
+    "id": "Q02",
+    "query": "formato del nombre de una migración Flyway",
+    "docTitle": "Finutive · backend · Convenciones Flyway",
+    "section": "Formato de versión"
+  },
+  {
+    "id": "Q03",
+    "query": "estilos de un componente en Shadow DOM del legacy",
+    "docTitle": "Finutive · front react · Integracion con legacy",
+    "section": "Shadow DOM y gestión de estilos CSS"
+  },
+  {
+    "id": "Q04",
+    "query": "qué merges de una épica necesitan Merge Request",
+    "docTitle": "Finutive · front · Proceso de ramas",
+    "section": "Qué merge necesita Merge Request"
+  },
+  {
+    "id": "Q05",
+    "query": "qué prefijo de rama se usa para un BUG según la Tipología de Notion",
+    "docTitle": "Finutive · front · Proceso de ramas",
+    "section": "Nomenclatura"
+  },
+  {
+    "id": "Q06",
+    "query": "por qué se usan 12 dígitos y no 14 en las versiones de Flyway",
+    "docTitle": "Finutive · backend · Convenciones Flyway",
+    "section": "Por qué 12 y no 14"
+  },
+  {
+    "id": "Q07",
+    "query": "puedo crear un índice CONCURRENTLY en el mismo script de migración",
+    "docTitle": "Finutive · backend · Convenciones Flyway",
+    "section": "Checklist al crear una migración"
+  },
+  {
+    "id": "Q08",
+    "query": "en qué carpeta va una migración del datasource global",
+    "docTitle": "Finutive · backend · Convenciones Flyway",
+    "section": "Ubicaciones"
+  },
+  {
+    "id": "Q09",
+    "query": "las migraciones de índices CONCURRENTLY no terminan en local, qué hago",
+    "docTitle": "Finutive · backend · README",
+    "section": "Flyway: dos migraciones"
+  },
+  {
+    "id": "Q10",
+    "query": "V202607241201 índice verifactu_record business_cif previous_hash",
+    "docTitle": "Finutive · backend · README",
+    "section": "Flyway: dos migraciones"
+  },
+  {
+    "id": "Q11",
+    "query": "cómo lanzar el proxy HTTPS local con local-ssl-proxy",
+    "docTitle": "Finutive · backend · LocalInstall",
+    "section": "Proxy HTTPS local"
+  },
+  {
+    "id": "Q12",
+    "query": "en qué orden se ejecuta el backfill de threading legacy de Global",
+    "docTitle": "Finutive · global · README",
+    "section": "Backfill de threading legacy"
+  },
+  {
+    "id": "Q13",
+    "query": "error AUTHENTICATIONFAILED en el buzón IMAP, qué App Password",
+    "docTitle": "Finutive · global · README",
+    "section": "Troubleshooting"
+  },
+  {
+    "id": "Q14",
+    "query": "pasos para dar de alta una instancia nueva en el microservicio de comunicaciones",
+    "docTitle": "Finutive · global · README",
+    "section": "Onboarding de instancia nueva"
+  },
+  {
+    "id": "Q15",
+    "query": "variables CI/CD de GitLab necesarias para desplegar finutive-front-react",
+    "docTitle": "Finutive · front react · Despliegue",
+    "section": "Paso 1"
+  },
+  {
+    "id": "Q16",
+    "query": "el pod da ImagePullBackOff, cuál es la causa probable",
+    "docTitle": "Finutive · front react · Despliegue",
+    "section": "Diagnóstico rápido"
+  },
+  {
+    "id": "Q17",
+    "query": "actualizar el ConfigMap del legacy con REACT_SHELL_URL",
+    "docTitle": "Finutive · front react · Despliegue",
+    "section": "Paso 3"
+  },
+  {
+    "id": "Q18",
+    "query": "precauciones al arrancar el entorno OCR local con schedulers",
+    "docTitle": "Finutive · local · Runbook entorno OCR",
+    "section": "Precauciones de arranque"
+  },
+  {
+    "id": "Q19",
+    "query": "flags REACT_SIDEBAR_ENABLED en config.js del legacy",
+    "docTitle": "Finutive · front react · Integracion con legacy",
+    "section": "Flags de activación"
+  },
+  {
+    "id": "Q20",
+    "query": "cómo registrar un nuevo punto de montaje en embed.jsx",
+    "docTitle": "Finutive · front react · Integracion con legacy",
+    "section": "Paso 2"
+  },
+  {
+    "id": "Q21",
+    "query": "comandos de desarrollo de finutive-front-react npm run storybook",
+    "docTitle": "Finutive · front react · Guia de desarrollo",
+    "section": "Comandos de Desarrollo"
+  },
+  {
+    "id": "Q22",
+    "query": "qué builds hay que lanzar antes de commitear en el front legacy",
+    "docTitle": "Finutive · front legacy · Guia de desarrollo",
+    "section": "Disparadores de Build"
+  },
+  {
+    "id": "Q23",
+    "query": "cómo liberar un bloqueo huérfano del hotfix 2442 cuando POST /run da 409",
+    "docTitle": "2442 preview facturas · 01 Runbook publicacion hotfix",
+    "section": "Liberar un bloqueo huérfano"
+  },
+  {
+    "id": "Q24",
+    "query": "precedencia de parámetros MULTIMEDIA_FIX_2442 entre petición, variable de entorno y application.yml",
+    "docTitle": "2442 preview facturas · 01 Runbook publicacion hotfix",
+    "section": "Precedencia de los parámetros"
+  },
+  {
+    "id": "Q25",
+    "query": "por qué la migración del hotfix 2442 pasa a la versión 202611191000",
+    "docTitle": "2442 preview facturas · 01 Runbook publicacion hotfix",
+    "section": "Qué cambia"
+  },
+  {
+    "id": "Q26",
+    "query": "backoff creciente 15 30 60 120 240 minutos cuando Gmail da OVERQUOTA",
+    "docTitle": "2454 gmail cuota · 01-02 STORY02.md",
+    "section": "Contexto y objetivos"
+  },
+  {
+    "id": "Q27",
+    "query": "max-reconnects-per-cycle presupuesto de reconexiones IMAP y borrado diario",
+    "docTitle": "2454 gmail cuota · 01-03 STORY03.md",
+    "section": "Contexto y objetivos"
+  },
+  {
+    "id": "Q28",
+    "query": "ticket 2447 FolderClosedException relectura fallida de un correo ya despachado",
+    "docTitle": "2447 falso positivo correo ilegible · 01-01 STORY01.md",
+    "section": "Resumen"
+  },
+  {
+    "id": "Q29",
+    "query": "reintento único de la lectura de cabeceras ante corte de conexión Sentry GLOBAL-N",
+    "docTitle": "2454 gmail cuota · 01-05 STORY05.md",
+    "section": "Contexto y objetivos"
+  },
+  {
+    "id": "Q30",
+    "query": "tabla diario multimedia_fix_2442_affected para corregir las facturas ya guardadas",
+    "docTitle": "2442 preview facturas · 01-02 STORY02",
+    "section": "Forma de aplicación"
+  },
+  {
+    "id": "Q31",
+    "query": "aislamiento css shadow dom adoptedStyleSheets en react",
+    "docTitle": "Finutive · front react · Arquitectura",
+    "section": "Shadow DOM y aislamiento CSS"
+  },
+  {
+    "id": "Q32",
+    "query": "como se nombra la rama de un hotfix sin epica",
+    "docTitle": "Finutive · front · Proceso de ramas",
+    "section": "Nomenclatura"
+  },
+  {
+    "id": "Q33",
+    "query": "cuantos digitos lleva el timestamp de una migracion de base de datos",
+    "docTitle": "Finutive · backend · Convenciones Flyway",
+    "section": "Formato de versión"
+  },
+  {
+    "id": "Q34",
+    "query": "2442 mapa de historias preview facturas",
+    "docTitle": "2442 preview facturas · 01 Development plan",
+    "section": "Mapa de historias"
+  },
+  {
+    "id": "Q35",
+    "query": "2454 decisiones y riesgos compartidos del plan de cuota de Gmail",
+    "docTitle": "2454 gmail cuota · 01 Development plan.md",
+    "section": "Decisiones y riesgos compartidos"
+  }
+]
