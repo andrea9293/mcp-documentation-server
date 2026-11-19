@@ -121,7 +121,9 @@ export async function formatAgentSearchResponse(
     // Reliability is judged on the whole candidate pool, not only on the few results shown:
     // hybrid ranking can put text-only matches first while a strong semantic match sits lower.
     const topSim = Math.max(0, ...results.map(r => r.similarity ?? 0));
-    const reliable = kept.length > 0 && topSim >= minReliableSimilarity();
+    // Similarity unavailable for every candidate = unknown, not "unreliable"
+    const known = results.some(r => r.similarity !== undefined);
+    const reliable = kept.length > 0 && (!known || topSim >= minReliableSimilarity());
     return {
         status: reliable ? 'ok' : 'sin_resultados_fiables',
         ...(reliable ? {} : {

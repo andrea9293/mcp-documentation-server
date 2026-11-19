@@ -654,7 +654,7 @@ export class OramaStore {
                     metadata: this.safeJsonParse(hit.document.metadata),
                 } as DocumentChunk,
                 score: hit.score,
-                similarity: cosine(embedding, (hit.document as any).embedding),
+                similarity: this.hitSimilarity(embedding, hit),
             }));
         } catch (error) {
             console.error('[OramaStore] Error searching chunks:', error);
@@ -711,7 +711,7 @@ export class OramaStore {
                     metadata: this.safeJsonParse(hit.document.metadata),
                 } as DocumentChunk,
                 score: hit.score,
-                similarity: cosine(embedding, (hit.document as any).embedding),
+                similarity: this.hitSimilarity(embedding, hit),
             }));
         } catch (error) {
             console.error('[OramaStore] Error in searchAllDocuments:', error);
@@ -763,5 +763,18 @@ export class OramaStore {
         } catch {
             return {};
         }
+    }
+
+    /**
+     * Cosine similarity between the query and a hit. Uses the vector returned with the hit and,
+     * when the search did not return it, reads it from the stored document, so the reliability
+     * signal never silently degrades to 0.
+     */
+    private hitSimilarity(queryEmbedding: number[], hit: { id: string; document: any }): number | undefined {
+        let vec = hit.document?.embedding;
+        if (!vec && this.chunksDb) {
+            try { vec = (getByID(this.chunksDb, hit.id) as any)?.embedding; } catch { /* ignore */ }
+        }
+        return cosine(queryEmbedding, vec);
     }
 }
