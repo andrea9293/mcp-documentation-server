@@ -1,11 +1,12 @@
 import { create, insert, remove, search, save, load, count, getByID } from '@orama/orama';
 import type { AnyOrama, Results } from '@orama/orama';
 import { persistToFile, restoreFromFile } from '@orama/plugin-data-persistence/server';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { readdir, readFile } from 'fs/promises';
 import * as path from 'path';
 import { Document, DocumentChunk, SearchResult, OramaChunkDocument, OramaDocDocument, OramaParentDocument, ParentChunkData } from './types.js';
 import { getDefaultDataDir } from './utils.js';
+import { createSpanishTokenizer, TOKENIZER_VERSION } from './tokenizer.js';
 
 function cosine(a: ArrayLike<number>, b?: ArrayLike<number>): number | undefined {
     if (!b || a.length !== b.length) return undefined;
@@ -26,6 +27,7 @@ export class OramaStore {
     private docsDbPath: string;
     private parentsDbPath: string;
     private migrationFlagPath: string;
+    private indexVersionPath: string;
     private vectorDimensions: number;
     private initialized = false;
     /** True when the restored chunks DB uses an older schema and must be rebuilt. */
@@ -38,6 +40,7 @@ export class OramaStore {
         this.docsDbPath = path.join(this.dataDir, 'orama-docs.msp');
         this.parentsDbPath = path.join(this.dataDir, 'orama-parents.msp');
         this.migrationFlagPath = path.join(this.dataDir, 'migration-complete.flag');
+        this.indexVersionPath = path.join(this.dataDir, 'index-version.json');
         this.vectorDimensions = vectorDimensions;
 
         if (!existsSync(this.dataDir)) {
@@ -111,6 +114,9 @@ export class OramaStore {
         if (restoredChunks) {
             const sch = (this.chunksDb as any)?.schema;
             if (sch && !('heading_path' in sch)) this.needsReindex = true;
+            if (this.readIndexVersion() !== TOKENIZER_VERSION) this.needsReindex = true;
+            // restoreFromFile builds the DB with the default tokenizer: swap in ours
+            if (this.chunksDb) (this.chunksDb as any).tokenizer = createSpanishTokenizer();
         }
 
         this.initialized = true;
@@ -127,6 +133,7 @@ export class OramaStore {
      */
     private createChunksDb(): AnyOrama {
         return create({
+            components: { tokenizer: createSpanishTokenizer() },
             schema: {
                 document_id: 'string',
                 document_title: 'string',
@@ -187,6 +194,14 @@ export class OramaStore {
         });
     }
 
+    private readIndexVersion(): string | null {
+        try {
+            return JSON.parse(readFileSync(this.indexVersionPath, 'utf-8')).tokenizer ?? null;
+        } catch {
+            return null;
+        }
+    }
+
     /**
      * Persist all DBs to disk
      */
@@ -200,6 +215,9 @@ export class OramaStore {
             }
             if (this.parentsDb) {
                 await persistToFile(this.parentsDb, 'binary', this.parentsDbPath, 'node');
+            }
+            if (!this.needsReindex) {
+                writeFileSync(this.indexVersionPath, JSON.stringify({ tokenizer: TOKENIZER_VERSION }));
             }
             console.error('[OramaStore] Persisted DBs to disk');
         } catch (error) {
