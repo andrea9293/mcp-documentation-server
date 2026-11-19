@@ -473,6 +473,24 @@ export class OramaStore {
     }
 
     /**
+     * Lightweight index of all documents (id, title, metadata); no chunks.
+     */
+    async listDocumentIndex(): Promise<Array<{ id: string; title: string; metadata: Record<string, any>; created_at: string; updated_at: string }>> {
+        if (!this.initialized) await this.initialize();
+        if (!this.docsDb) return [];
+        const total = count(this.docsDb);
+        if (total === 0) return [];
+        const result = await search(this.docsDb, { term: '', limit: total, threshold: 0 }) as Results<OramaDocDocument>;
+        return result.hits.map(h => ({
+            id: h.document.id,
+            title: h.document.title,
+            metadata: this.safeJsonParse(h.document.metadata),
+            created_at: h.document.created_at,
+            updated_at: h.document.updated_at,
+        }));
+    }
+
+    /**
      * Get all documents (metadata only, no embeddings)
      */
     async getAllDocuments(): Promise<Document[]> {

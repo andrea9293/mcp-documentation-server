@@ -9,6 +9,7 @@ import { existsSync } from 'fs';
 import { createLazyEmbeddingProvider } from './embedding-provider.js';
 import { DocumentManager } from './document-manager.js';
 import { GeminiSearchService } from './gemini-search-service.js';
+import { parseFilters } from './metadata-utils.js';
 import { deduplicateSearchResults, formatDocumentList } from './search-utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -127,6 +128,7 @@ app.delete('/api/documents/:id', async (req, res): Promise<void> => {
 app.post('/api/search', async (req, res): Promise<void> => {
     try {
         const { document_id, query, limit } = req.body;
+        const filters = parseFilters(req.body);
         if (!document_id || !query) {
             res.status(400).json({ error: 'document_id and query are required' });
             return;
@@ -137,7 +139,7 @@ app.post('/api/search', async (req, res): Promise<void> => {
             res.status(404).json({ error: `Document not found: ${document_id}` });
             return;
         }
-        const results = await manager.searchDocuments(document_id, query, limit || 10);
+        const results = await manager.searchDocuments(document_id, query, limit || 10, filters);
 
         const searchResults = await deduplicateSearchResults(results, manager);
         res.json(searchResults);
@@ -150,12 +152,13 @@ app.post('/api/search', async (req, res): Promise<void> => {
 app.post('/api/search-all', async (req, res): Promise<void> => {
     try {
         const { query, limit } = req.body;
+        const filters = parseFilters(req.body);
         if (!query) {
             res.status(400).json({ error: 'query is required' });
             return;
         }
         const manager = await getManager();
-        const results = await manager.searchAllDocuments(query, limit || 10);
+        const results = await manager.searchAllDocuments(query, limit || 10, filters);
 
         const searchResults = await deduplicateSearchResults(results, manager);
         res.json(searchResults);

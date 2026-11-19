@@ -7,6 +7,7 @@ import { createLazyEmbeddingProvider } from './embedding-provider.js';
 import { DocumentManager } from './document-manager.js';
 import { GeminiSearchService } from './gemini-search-service.js';
 import { startWebServer } from './web-server.js';
+import { parseFilters } from './metadata-utils.js';
 import { deduplicateSearchResults, formatDocumentList } from './search-utils.js';
 
 // Initialize server
@@ -55,6 +56,55 @@ server.addTool({
     },
 });
 
+// Update document metadata tool
+server.addTool({
+    name: "update_document_metadata",
+    description: "Update a document's metadata (tags, folder, ticket, version, ...) keeping its id. Provided keys are merged; a null value removes the key. Chunks are re-embedded because tags are part of the indexed text.",
+    parameters: z.object({
+        id: z.string().describe("Document ID"),
+        tags: z.array(z.string()).optional().describe("Replace the tags list"),
+        folder: z.string().optional().describe("Folder, e.g. 'finutive/front'"),
+        ticket: z.array(z.string()).optional().describe("Related ticket ids"),
+        metadata: z.object({}).passthrough().optional().describe("Any other metadata keys to merge (null removes a key)"),
+    }),
+    execute: async ({ id, tags, folder, ticket, metadata }) => {
+        try {
+            const manager = await initializeDocumentManager();
+            const patch: Record<string, any> = { ...(metadata || {}) };
+            if (tags !== undefined) patch.tags = tags.map(t => t.toLowerCase());
+            if (folder !== undefined) patch.folder = folder;
+            if (ticket !== undefined) patch.ticket = ticket;
+            const doc = await manager.updateDocumentMetadata(id, patch);
+            if (!doc) return `Document not found: ${id}`;
+            return JSON.stringify({ id: doc.id, title: doc.title, metadata: doc.metadata }, null, 2);
+        } catch (error) {
+            throw new Error(`Failed to update metadata: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    },
+});
+
+// Update document content tool
+server.addTool({
+    name: "update_document",
+    description: "Replace a document's content (and optionally title/metadata) keeping the same id. Chunks are rebuilt. A YAML front matter in content (tags, folder, ticket) is parsed into metadata.",
+    parameters: z.object({
+        id: z.string().describe("Document ID to update"),
+        content: z.string().describe("The new full content"),
+        title: z.string().optional().describe("New title (default: keep current)"),
+        metadata: z.object({}).passthrough().optional().describe("Metadata to merge"),
+    }),
+    execute: async ({ id, content, title, metadata }) => {
+        try {
+            const manager = await initializeDocumentManager();
+            const doc = await manager.updateDocument(id, content, title, metadata);
+            if (!doc) return `Document not found: ${id}`;
+            return `Document ${doc.id} updated ("${doc.title}", ${doc.chunks.length} chunks).`;
+        } catch (error) {
+            throw new Error(`Failed to update document: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    },
+});
+
 // Delete document tool
 server.addTool({
     name: "delete_document",
@@ -94,6 +144,9 @@ server.addTool({
         document_id: z.string().describe("The ID of the document to search within"),
         query: z.string().describe("The search query"),
         limit: z.number().optional().default(10).describe("Maximum number of chunk results to return"),
+        tags: z.array(z.string()).optional().describe("Optional: only documents having ALL these tags"),
+        folder: z.string().optional().describe("Optional: only documents in this folder (prefix match, e.g. 'finutive/front')"),
+        ticket: z.string().optional().describe("Optional: only documents linked to this ticket id (e.g. '2447')"),
     }), execute: async (args) => {
         try {
             const manager = await initializeDocumentManager();
@@ -102,7 +155,7 @@ server.addTool({
             if (!document) {
                 throw new Error(`Document with ID '${args.document_id}' Not found. Use 'list_documents' to get all id of documents.`);
             }
-            const results = await manager.searchDocuments(args.document_id, args.query, args.limit);
+            const results = await manager.searchDocuments(args.document_id, args.query, args.limit, parseFilters(args));
 
             if (results.length === 0) {
                 return "No chunks found matching your query in the specified document.";
@@ -168,10 +221,13 @@ server.addTool({
     parameters: z.object({
         query: z.string().describe("The search query"),
         limit: z.number().optional().default(10).describe("Maximum number of chunk results to return"),
+        tags: z.array(z.string()).optional().describe("Optional: only documents having ALL these tags"),
+        folder: z.string().optional().describe("Optional: only documents in this folder (prefix match, e.g. 'finutive/front')"),
+        ticket: z.string().optional().describe("Optional: only documents linked to this ticket id (e.g. '2447')"),
     }), execute: async (args) => {
         try {
             const manager = await initializeDocumentManager();
-            const results = await manager.searchAllDocuments(args.query, args.limit);
+            const results = await manager.searchAllDocuments(args.query, args.limit, parseFilters(args));
 
             if (results.length === 0) {
                 return "No chunks found matching your query across all documents.";

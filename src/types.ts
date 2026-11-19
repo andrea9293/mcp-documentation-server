@@ -1,4 +1,5 @@
 // Types for the MCP Documentation Server
+import type { SearchFilters } from './metadata-utils.js';
 
 export interface DocumentChunk {
     id: string;
@@ -54,11 +55,7 @@ export interface SearchOptions {
     limit?: number;
     threshold?: number;
     includeContent?: boolean;
-    filters?: {
-        tags?: string[];
-        author?: string;
-        contentType?: string;
-    };
+    filters?: SearchFilters;
 }
 
 export interface AddDocumentRequest {
