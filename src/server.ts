@@ -8,6 +8,9 @@ import { DocumentManager } from './document-manager.js';
 import { GeminiSearchService } from './gemini-search-service.js';
 import { startWebServer } from './web-server.js';
 import { parseFilters } from './metadata-utils.js';
+
+/** Candidates fetched per search so the reliability signal does not depend on the requested limit. */
+const CANDIDATE_POOL = 30;
 import { deduplicateSearchResults, formatAgentSearchResponse, formatDocumentList } from './search-utils.js';
 
 // Initialize server
@@ -156,7 +159,7 @@ server.addTool({
             if (!document) {
                 throw new Error(`Document with ID '${args.document_id}' Not found. Use 'list_documents' to get all id of documents.`);
             }
-            const results = await manager.searchDocuments(args.document_id, args.query, args.limit, parseFilters(args));
+            const results = await manager.searchDocuments(args.document_id, args.query, Math.max(args.limit, CANDIDATE_POOL), parseFilters(args));
 
             const searchResults = await deduplicateSearchResults(results, manager);
             const res = await formatAgentSearchResponse(searchResults, manager, { maxChars: args.max_chars, limit: args.limit });
@@ -221,7 +224,7 @@ server.addTool({
     }), execute: async (args) => {
         try {
             const manager = await initializeDocumentManager();
-            const results = await manager.searchAllDocuments(args.query, args.limit, parseFilters(args));
+            const results = await manager.searchAllDocuments(args.query, Math.max(args.limit, CANDIDATE_POOL), parseFilters(args));
 
             const searchResults = await deduplicateSearchResults(results, manager);
             const res = await formatAgentSearchResponse(searchResults, manager, { maxChars: args.max_chars, limit: args.limit });
